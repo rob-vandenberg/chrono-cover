@@ -7,9 +7,13 @@
  *
  * This is NOT a Lovelace dashboard card - it has no visual editor and is
  * not intended for direct placement in a dashboard grid. It is a resource
- * meant to be invoked as the content of a popup (e.g. via browser_mod's
- * browser_mod.popup service, triggered from a tap_action elsewhere on the
- * dashboard), as a stand-in for HA's native more-info dialog for covers.
+ * meant to be invoked as a popup, triggered by a tap_action elsewhere on
+ * the dashboard, as a stand-in for HA's native more-info dialog for
+ * covers. It can be triggered two ways:
+ *  - Its own built-in fire-dom-event listener (see "Self-fired popup"
+ *    below) - no other resource required.
+ *  - Any other popup mechanism (e.g. browser_mod's browser_mod.popup
+ *    service) pointing its content: at type: custom:chrono-cover.
  *
  * Visual design and behavior are ported from chrono-slider-card, rebuilt
  * on vertical-cover-slider-card's architecture: a plain HTMLElement with a
@@ -20,12 +24,37 @@
  * device_class attribute (the "Show as" field in HA's entity settings
  * dialog) - no per-instance device_type configuration required, unless
  * explicitly overridden in config.
+ *
+ * Self-fired popup:
+ *   tap_action:
+ *     action: fire-dom-event
+ *     chrono-cover:
+ *       data:
+ *         title: Zijraam
+ *         entity: cover.woonkamer_zijraam
+ *         device_type: awning
+ *         favorite_positions: [0, 25, 75, 100]
+ *         ...any other chrono-cover config option
+ *   Same calling convention as chrono-popup's chrono-popup: key - fire a
+ *   native fire-dom-event action, namespaced under this resource's own
+ *   key so multiple such resources coexist without colliding. "title"
+ *   drives the popup header; every other key in "data" is passed straight
+ *   through as this element's own config, unchanged.
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.0';
+const CARD_VERSION = '1.0.1';
 
 // --- Version History ----------------------------------------------------
+// v1.0.1: Added a built-in self-fired popup, triggered via a native
+//          fire-dom-event tap_action namespaced under a "chrono-cover"
+//          key (same calling convention as chrono-popup). No external
+//          dependency: live entity updates while the popup is open use
+//          hass.connection.subscribeEvents('state_changed') directly,
+//          not the home-assistant-js-websocket package chrono-popup
+//          imports from CDN - that connection object already exposes the
+//          same method, since HA's own frontend runtime is already built
+//          on that library.
 // v1.0.0: Initial release.
 
 // --- CONSTS ---------------------------------------------------------------
@@ -1079,3 +1108,187 @@ class ChronoCover extends HTMLElement {
 }
 
 customElements.define('chrono-cover', ChronoCover);
+
+// --- Self-fired popup host -------------------------------------------------------
+// Vanilla, self-contained - same architectural rule as ChronoCover itself.
+// Sits outside any dashboard's card tree (it's appended directly to
+// document.body), so it never receives .hass automatically the way a
+// placed card does. Obtained once at open() via the live <home-assistant>
+// element, then kept live for as long as the popup stays open via
+// hass.connection.subscribeEvents(..., 'state_changed') - a method
+// already exposed on the connection object HA's own frontend hands us,
+// requiring no import of its own.
+
+const EVENT_KEY = 'chrono-cover';
+
+class ChronoCoverPopupHost extends HTMLElement {
+  connectedCallback() {
+    if (this.shadowRoot) return;
+    this.attachShadow({ mode: 'open' });
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+        }
+        .overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          z-index: var(--chrono-cover-popup-z-index, 10000);
+          background: var(--chrono-cover-popup-backdrop, rgba(0, 0, 0, 0.5));
+          align-items: flex-start;
+          justify-content: center;
+          overflow-y: auto;
+        }
+        .overlay.open {
+          display: flex;
+        }
+        .frame {
+          position: relative;
+          box-sizing: border-box;
+          width: 90vw;
+          max-width: var(--chrono-cover-popup-max-width, 420px);
+          margin-top: var(--chrono-cover-popup-margin-top, 10vh);
+          background: var(--chrono-cover-popup-background, var(--card-background-color, #1c1c1c));
+          border-radius: var(--chrono-cover-popup-border-radius, var(--ha-dialog-border-radius, 28px));
+          box-shadow: var(--chrono-cover-popup-box-shadow, 0 8px 32px rgba(0, 0, 0, 0.5));
+          font-family: var(--paper-font-body1_-_font-family, inherit);
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          padding: 20px 20px 12px 20px;
+        }
+        .title {
+          font-size: 24px;
+          line-height: 2rem;
+          font-weight: 400;
+          color: var(--primary-text-color, #fff);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .close-button {
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: absolute;
+          z-index: 1;
+          top: 18px;
+          right: 20px;
+          background: none;
+          border: none;
+          color: var(--primary-text-color, #fff);
+          width: 24px;
+          height: 24px;
+          padding: 0;
+          border-radius: 50%;
+        }
+        .close-button:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+        .close-button svg {
+          display: block;
+          width: 100%;
+          height: 100%;
+          fill: currentColor;
+        }
+        .body {
+          padding: 0 0 12px 0;
+        }
+      </style>
+      <div class="overlay">
+        <div class="frame">
+          <button class="close-button" aria-label="Close">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <div class="header"><span class="title"></span></div>
+          <div class="body"></div>
+        </div>
+      </div>
+    `;
+    const root = this.shadowRoot;
+    this._overlayEl = root.querySelector('.overlay');
+    this._titleEl = root.querySelector('.title');
+    this._bodyEl = root.querySelector('.body');
+    this._overlayEl.addEventListener('click', (e) => {
+      if (e.target === this._overlayEl) this.close();
+    });
+    root.querySelector('.close-button').addEventListener('click', () => this.close());
+    this._boundKeydown = (e) => {
+      if (e.key === 'Escape') this.close();
+    };
+  }
+
+  _getHass() {
+    const ha = document.querySelector('home-assistant');
+    return ha ? ha.hass : undefined;
+  }
+
+  open(data) {
+    if (!this.shadowRoot) this.connectedCallback();
+    const { title, ...config } = data || {};
+    this._titleEl.textContent = title || '';
+
+    this._bodyEl.innerHTML = '';
+    const el = document.createElement('chrono-cover');
+    el.setConfig(config);
+    el.hass = this._getHass();
+    this._bodyEl.appendChild(el);
+    this._coverEl = el;
+
+    this._overlayEl.classList.add('open');
+    document.addEventListener('keydown', this._boundKeydown);
+    this._subscribeToUpdates();
+  }
+
+  close() {
+    this._overlayEl.classList.remove('open');
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._unsubscribeFromUpdates();
+    this._bodyEl.innerHTML = '';
+    this._coverEl = null;
+  }
+
+  async _subscribeToUpdates() {
+    this._unsubscribeFromUpdates();
+    const hass = this._getHass();
+    if (!hass || !hass.connection) return;
+    try {
+      this._unsub = await hass.connection.subscribeEvents(() => {
+        if (this._coverEl) this._coverEl.hass = this._getHass();
+      }, 'state_changed');
+    } catch (err) {
+      console.warn('chrono-cover: could not subscribe to entity updates - popup will not update live', err);
+    }
+  }
+
+  _unsubscribeFromUpdates() {
+    if (typeof this._unsub === 'function') {
+      this._unsub();
+    }
+    this._unsub = null;
+  }
+}
+
+if (!customElements.get('chrono-cover-popup-host')) {
+  customElements.define('chrono-cover-popup-host', ChronoCoverPopupHost);
+}
+
+// Runs once per module load - guarded the same way the element definition
+// above already is, so a duplicate resource load never double-registers
+// the listener or appends a second host element.
+if (!window.__chronoCoverPopupHostInstalled) {
+  window.__chronoCoverPopupHostInstalled = true;
+
+  const host = document.createElement('chrono-cover-popup-host');
+  document.body.appendChild(host);
+
+  document.addEventListener('ll-custom', (ev) => {
+    const detail = ev.detail && ev.detail[EVENT_KEY];
+    if (!detail) return;
+    host.open(detail.data || {});
+  });
+}
+
