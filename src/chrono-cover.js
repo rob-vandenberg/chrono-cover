@@ -43,9 +43,26 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.3';
+const CARD_VERSION = '1.0.4';
 
 // --- Version History ----------------------------------------------------
+// v1.0.4: Added the styles: config option, ported from chrono-slider-card -
+//          a flat { class_name: { property: value } } block converted to
+//          CSS and adopted as a stylesheet, so overrides reliably win
+//          against this element's own defaults. "host" reaches this
+//          element's own root; every other key reaches a real class name
+//          already present in the markup (e.g. "ha_card"). The entity's
+//          live state color, previously set as an inline style, now goes
+//          through its own adopted stylesheet instead, since an inline
+//          style can never lose to any stylesheet - it would have made
+//          the color impossible to override. One reserved key inside
+//          styles:, "popup", is a nested object read by the popup host
+//          separately and built into its own stylesheet, adopted into its
+//          own shadow root - the popup window and the <chrono-cover>
+//          element inside it are separate shadow trees, so each needs its
+//          own stylesheet; "popup" only has any effect when the built-in
+//          popup trigger is used, not with browser_mod. Default for
+//          show_control_switch_buttons changed from false to true.
 // v1.0.3: Removed ':host { all: initial; }' from the popup host's CSS -
 //          it was blocking inheritance of every HA theme color and the
 //          font, not just the font (the only visible symptom). Wrapped
@@ -169,7 +186,7 @@ const DEFAULT_SHOW_NAME = true;
 const DEFAULT_SHOW_STATE = true;
 const DEFAULT_SHOW_LAST_CHANGED = true;
 const DEFAULT_SHOW_PERCENTAGE = true;
-const DEFAULT_SHOW_CONTROL_SWITCH_BUTTONS = false;
+const DEFAULT_SHOW_CONTROL_SWITCH_BUTTONS = true;
 const DEFAULT_SHOW_CONTROLS = true;
 const DEFAULT_SHOW_FAVORITES = true;
 const DEFAULT_CONTROL = 'slider';
@@ -327,14 +344,69 @@ function ccExpandEscapedNewlines(text) {
   return String(text).replace(/\\n/g, '\n');
 }
 
+// Converts a snake_case string to kebab-case. YAML already allows hyphens
+// directly in key names - this only matters for someone who prefers typing
+// styles: keys as snake_case, matching every other config option's style.
+function ccToKebab(str) {
+  return String(str).replace(/_/g, '-');
+}
+
+// Converts a flat { class_name: { property: value } } object - a styles:
+// block, or the nested "popup" object within one - into ready-to-adopt CSS
+// text. "host" is the one reserved key: it targets :host, since there is no
+// element with class="host" to reach the normal way. Every other key is
+// treated as a real, already-present class name (e.g. "ha_card" reaches
+// <ha-card class="ha-card">) - same convention as chrono-slider-card.
+// skipKey, if given, is left out entirely - used to keep "popup" out of the
+// control element's own stylesheet, since that key belongs to the popup host.
+function ccBuildUserStylesCss(stylesConfig, skipKey) {
+  let css = '';
+  for (const [className, props] of Object.entries(stylesConfig)) {
+    if (skipKey && className === skipKey) continue;
+    if (!props || typeof props !== 'object' || Array.isArray(props)) continue;
+    const declarations = Object.entries(props)
+      .map(([prop, value]) => `${ccToKebab(prop)}: ${value};`)
+      .join(' ');
+    const selector = className === 'host' ? ':host' : `.${ccToKebab(className)}`;
+    css += `${selector} { ${declarations} }\n`;
+  }
+  return css;
+}
+
 // --- Custom element --------------------------------------------------------------
 
 class ChronoCover extends HTMLElement {
+  constructor() {
+    super();
+    // Two constructed sheets, adopted in _buildDom() in this fixed order
+    // (later = wins ties): _stateStyleSheet first, _userStyleSheet last.
+    // _stateStyleSheet carries the entity-state-driven slider color
+    // (rewritten in _updateUI() on every hass push) - moved here from a
+    // plain inline style, matching the fix chrono-slider-card already made
+    // (v1.3.41): an inline style always wins over any stylesheet regardless
+    // of adoption order, which would make it impossible for a person's own
+    // styles: override to ever win against it. _userStyleSheet holds a
+    // person's styles: overrides, adopted last so they always win against
+    // both this element's own defaults and the state-driven color.
+    this._stateStyleSheet = new CSSStyleSheet();
+    this._userStyleSheet = new CSSStyleSheet();
+  }
+
   setConfig(config) {
     if (!config.entity) {
       throw new Error('You need to define an entity');
     }
     this._config = config;
+
+    let stylesConfig = config.styles;
+    if (stylesConfig !== undefined && (typeof stylesConfig !== 'object' || Array.isArray(stylesConfig))) {
+      console.warn('chrono-cover: "styles" must be an object, ignoring.');
+      stylesConfig = {};
+    }
+    // "popup" is skipped here - it belongs to the popup host's own
+    // stylesheet, not this element's. It's read directly off config.styles
+    // in ChronoCoverPopupHost.open(), before this element even exists.
+    this._userStyleSheet.replaceSync(ccBuildUserStylesCss(stylesConfig || {}, 'popup'));
 
     this._showName = config.show_name !== undefined ? config.show_name === true : DEFAULT_SHOW_NAME;
     this._showState = config.show_state !== undefined ? config.show_state === true : DEFAULT_SHOW_STATE;
@@ -476,6 +548,12 @@ class ChronoCover extends HTMLElement {
   // ---- DOM construction (built once) ----
   _buildDom() {
     this.attachShadow({ mode: 'open' });
+    // Adopted stylesheets always win cascade ties against the inline
+    // <style> tag below, regardless of DOM position (same platform
+    // behavior chrono-slider-card's v1.3.41 fix relies on) - so state
+    // color and, in turn, a person's own override, both reliably win
+    // against this element's own static defaults.
+    this.shadowRoot.adoptedStyleSheets = [this._stateStyleSheet, this._userStyleSheet];
     this.shadowRoot.innerHTML = `
       <style>${ChronoCover._css()}</style>
       <ha-card class="ha-card">
@@ -711,9 +789,9 @@ class ChronoCover extends HTMLElement {
     const deviceClass = entity.attributes.device_class;
     const openColor = ccStateColorCssCover(entity.state, deviceClass, 'open');
     const color = ccStateColorCssCover(effectiveState, deviceClass);
-    this._sliderHostEl.style.setProperty('--state-cover-inactive-color', openColor);
-    this._sliderHostEl.style.setProperty('--slider-color', color);
-    this._sliderHostEl.style.setProperty('--slider-background', color);
+    this._stateStyleSheet.replaceSync(
+      `.control-slider-host { --state-cover-inactive-color: ${openColor}; --slider-color: ${color}; --slider-background: ${color}; }`
+    );
 
     const openDisabled = !ccCanOpenCover(entity, true);
     const closeDisabled = !ccCanOpenCover(entity, false);
@@ -1131,9 +1209,20 @@ customElements.define('chrono-cover', ChronoCover);
 const EVENT_KEY = 'chrono-cover';
 
 class ChronoCoverPopupHost extends HTMLElement {
+  constructor() {
+    super();
+    // Holds a person's styles.popup overrides - separate from and adopted
+    // into a different shadow root than ChronoCover's own _userStyleSheet,
+    // since this popup frame and the <chrono-cover> element inside it are
+    // two distinct shadow trees. A single stylesheet can't cross that
+    // boundary, so each shadow root gets its own.
+    this._userStyleSheet = new CSSStyleSheet();
+  }
+
   connectedCallback() {
     if (this.shadowRoot) return;
     this.attachShadow({ mode: 'open' });
+    this.shadowRoot.adoptedStyleSheets = [this._userStyleSheet];
     this.shadowRoot.innerHTML = `
       <style>
         .overlay {
@@ -1236,6 +1325,14 @@ class ChronoCoverPopupHost extends HTMLElement {
     if (!this.shadowRoot) this.connectedCallback();
     const { title, ...config } = data || {};
     this._titleEl.textContent = title || '';
+
+    const stylesConfig =
+      config.styles && typeof config.styles === 'object' && !Array.isArray(config.styles) ? config.styles : {};
+    const popupStyles =
+      stylesConfig.popup && typeof stylesConfig.popup === 'object' && !Array.isArray(stylesConfig.popup)
+        ? stylesConfig.popup
+        : {};
+    this._userStyleSheet.replaceSync(ccBuildUserStylesCss(popupStyles));
 
     this._bodyEl.innerHTML = '';
     const el = document.createElement('chrono-cover');
