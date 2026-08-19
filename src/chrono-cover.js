@@ -43,9 +43,15 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.2';
+const CARD_VERSION = '1.0.3';
 
 // --- Version History ----------------------------------------------------
+// v1.0.3: Removed ':host { all: initial; }' from the popup host's CSS -
+//          it was blocking inheritance of every HA theme color and the
+//          font, not just the font (the only visible symptom). Wrapped
+//          the popup host's setConfig() call in try/catch so a bad
+//          tap_action (e.g. missing entity) shows a visible error in the
+//          popup instead of failing silently.
 // v1.0.2: Fixed leftover CHRONO_COVER_VERSION reference in the console
 //          banner (from before the constant was renamed to CARD_VERSION),
 //          which threw a ReferenceError on load and broke the module.
@@ -1130,9 +1136,6 @@ class ChronoCoverPopupHost extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this.shadowRoot.innerHTML = `
       <style>
-        :host {
-          all: initial;
-        }
         .overlay {
           display: none;
           position: fixed;
@@ -1236,7 +1239,15 @@ class ChronoCoverPopupHost extends HTMLElement {
 
     this._bodyEl.innerHTML = '';
     const el = document.createElement('chrono-cover');
-    el.setConfig(config);
+    try {
+      el.setConfig(config);
+    } catch (err) {
+      this._bodyEl.textContent = `chrono-cover: ${err.message}`;
+      this._coverEl = null;
+      this._overlayEl.classList.add('open');
+      document.addEventListener('keydown', this._boundKeydown);
+      return;
+    }
     el.hass = this._getHass();
     this._bodyEl.appendChild(el);
     this._coverEl = el;
