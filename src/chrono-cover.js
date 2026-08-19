@@ -43,9 +43,12 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.1';
+const CARD_VERSION = '1.0.2';
 
 // --- Version History ----------------------------------------------------
+// v1.0.2: Fixed leftover CHRONO_COVER_VERSION reference in the console
+//          banner (from before the constant was renamed to CARD_VERSION),
+//          which threw a ReferenceError on load and broke the module.
 // v1.0.1: Added a built-in self-fired popup, triggered via a native
 //          fire-dom-event tap_action namespaced under a "chrono-cover"
 //          key (same calling convention as chrono-popup). No external
@@ -178,7 +181,7 @@ function ccToggleModeStorageKey(entityId) {
 
 // --- Console log ---------------------------------------------------------------
 console.info(
-  `%c CHRONO-%cCOVER%c %c v${CHRONO_COVER_VERSION} `,
+  `%c CHRONO-%cCOVER%c %c v${CARD_VERSION} `,
   'background-color: #101010; color: #FFFFFF; font-weight: bold; padding: 2px 0 2px 4px; border-radius: 3px 0 0 3px;',
   'background-color: #101010; color: #4676d3; font-weight: bold; padding: 2px 0;',
   'background-color: #101010; color: #FFFFFF; font-weight: bold; padding: 2px 4px 2px 0;',
