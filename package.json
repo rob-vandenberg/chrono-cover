@@ -1,0 +1,10 @@
+{
+  "name": "chrono-cover",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "terser src/chrono-cover.js -o dist/chrono-cover.js --compress --mangle"
+  },
+  "devDependencies": {
+    "terser": "^5.0.0"
+  }
+}
