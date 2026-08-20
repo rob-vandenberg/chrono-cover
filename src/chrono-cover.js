@@ -43,9 +43,27 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.5';
+const CARD_VERSION = '1.0.6';
 
 // --- Version History ----------------------------------------------------
+// v1.0.6: Fixed favorite-position buttons wrapping to a second row.
+//          Root cause verified against native HA's own more-info dialog
+//          (div.groups, the native equivalent element): native has no
+//          independent width cap at all - it simply fills whatever content
+//          width its dialog gives it (confirmed identical across four
+//          viewport-width samples: dialog width minus groups width was
+//          exactly 48px, i.e. div.content's 24px padding, in every case).
+//          chrono-cover's .favorites, by contrast, had its own hardcoded
+//          max-width: 384px, unrelated to its actual container - the fix
+//          removes that cap (max-width default changed from 384px to
+//          none) so it fills ha-card's actual width instead, same
+//          mechanism as native, not a copied pixel value from any one
+//          native measurement. Also added a 450px viewport-width
+//          breakpoint to the popup host's .frame/.overlay, matching
+//          native's own reported behavior of dropping its floating-card
+//          chrome for an edge-to-edge full-screen surface below that
+//          width - width/mechanism only, not height, since only width was
+//          verified in this session.
 // v1.0.5: Popup dialog chrome brought in line with native HA more-info
 //          dialog measurements (chrome only - the slider control itself is
 //          unchanged and out of scope for this comparison). .frame default
@@ -1160,7 +1178,7 @@ class ChronoCover extends HTMLElement {
         justify-content: center;
         flex-wrap: wrap;
         width: 100%;
-        max-width: var(--favorites-max-width, 384px);
+        max-width: var(--favorites-max-width, none);
         gap: var(--favorite-button-gap, 16px);
         margin-top: var(--favorites-gap, 16px);
         margin-bottom: var(--favorites-margin-bottom, 8px);
@@ -1270,6 +1288,19 @@ class ChronoCoverPopupHost extends HTMLElement {
           border-radius: var(--chrono-cover-popup-border-radius, var(--ha-dialog-border-radius, 24px));
           box-shadow: var(--chrono-cover-popup-box-shadow, 0 8px 32px rgba(0, 0, 0, 0.5));
           font-family: var(--paper-font-body1_-_font-family, inherit);
+        }
+        /* Matches native HA's own reported behavior: below this viewport
+           width, native drops its floating-dialog chrome for an
+           edge-to-edge full-screen surface. Width/mechanism only - native's
+           vertical behavior was not verified in this session. */
+        @media (max-width: 450px) {
+          .frame {
+            width: 100vw;
+            max-width: 100vw;
+            margin-top: 0;
+            border-radius: 0;
+            box-shadow: none;
+          }
         }
         .header {
           display: flex;
