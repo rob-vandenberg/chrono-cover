@@ -43,9 +43,25 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.8';
+const CARD_VERSION = '1.0.9';
 
 // --- Version History ----------------------------------------------------
+// v1.0.9: Fixed ccNormalizeFavoritePositions() to actually accept
+//          favorite_positions as a comma-separated string (e.g.
+//          "0, 25, 75, 100"), and added the {value:label} custom-label
+//          syntax (e.g. "{0:Close}") - both ported from
+//          chrono-slider-card's cscNormalizeFavoritePositions(). Previously
+//          any non-array input (including the documented plain string
+//          form) was treated as a single token, so Number() on a
+//          comma-containing string returned NaN and the entire favorites
+//          row silently rendered empty - a bug introduced in v1.0.0 and
+//          never caught until now. A bare non-array, non-string value
+//          (e.g. a lone number) is still wrapped into a one-item list
+//          first, same graceful handling as before. The
+//          already-normalized-object-token branch chrono-slider-card also
+//          has (for its own live editor passing objects back) is
+//          intentionally left out - chrono-cover has no editor and nothing
+//          in this codebase ever produces that shape.
 // v1.0.8: Added close_align ('left' default | 'right' | 'hidden') and
 //          title_align ('left' default | 'right' | 'center' | 'hidden')
 //          config options, read by the popup host in open(). Close button
@@ -382,13 +398,37 @@ function ccStateColorCssCover(entityState, deviceClass, forcedState) {
   return ccComputeCssVariable(ccDomainColorPropertiesCover(deviceClass, compareState, active));
 }
 
-// Plain-number favorite positions only (no {value:label} custom-label
-// syntax - that is editor-adjacent sugar this resource doesn't need).
+// Favorite positions as an array, a comma-separated string (e.g.
+// "0, 25, 75, 100"), or entries using a custom {value:label} syntax (e.g.
+// "{0:Close}") - ported from chrono-slider-card's
+// cscNormalizeFavoritePositions(). The already-normalized-object-token
+// branch that function also has (for its own live editor passing objects
+// back) is intentionally left out - chrono-cover has no editor and nothing
+// in this codebase ever produces that shape.
 function ccNormalizeFavoritePositions(positions) {
   if (!positions) return [];
-  const tokens = Array.isArray(positions) ? positions : [positions];
+  let tokens;
+  if (typeof positions === 'string') {
+    tokens = positions
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s !== '');
+  } else if (Array.isArray(positions)) {
+    tokens = positions;
+  } else {
+    tokens = [positions];
+  }
   const normalized = [];
   for (const token of tokens) {
+    const braced = /^\{(.+):(.+)\}$/.exec(String(token).trim());
+    if (braced) {
+      const value = Number(braced[1].trim());
+      const label = braced[2].trim();
+      if (isNaN(value) || label === '') continue;
+      const clamped = Math.max(0, Math.min(100, value));
+      normalized.push({ value: clamped, label });
+      continue;
+    }
     const value = Number(token);
     if (isNaN(value)) continue;
     const clamped = Math.max(0, Math.min(100, value));

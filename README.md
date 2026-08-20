@@ -138,22 +138,10 @@ tap_action:
       title: Living Room Awning
       entity: cover.living_room_awning
       device_type: awning
-      favorite_positions: [0, 25, 75, 100]
+      favorite_positions: 0, 25, 75, 100
 ```
 
 `title` sets the popup's header text. Every other key under `data:` is passed straight through as Chrono Cover's own config - the same options listed in the table below.
-
-**External popup mechanism.** If you already use something like browser_mod, point it at `type: custom:chrono-cover` instead, with the same options as top-level keys:
-
-```yaml
-service: browser_mod.popup
-data:
-  title: Living Room Awning
-  content:
-    type: custom:chrono-cover
-    entity: cover.living_room_awning
-    device_type: awning
-```
 
 ### Options
 
