@@ -43,9 +43,26 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.9';
+const CARD_VERSION = '1.1.10';
 
 // --- Version History ----------------------------------------------------
+// v1.1.10: Fixed DEVICE_TYPE_DEFAULTS auto-detection for shade entities.
+//           The tuned open_state/percentage/slider values ported from
+//           chrono-slider-card's "Screen" device_type had been filed under
+//           the key "screen" - not a real Home Assistant cover
+//           device_class (verified: awning, blind, curtain, damper, door,
+//           garage, gate, shade, shutter, window are the real values,
+//           "screen" is not one of them). Since chrono-cover looks up this
+//           table by the entity's own device_class for auto-detection,
+//           entities with device_class: shade were falling through to the
+//           untuned "cover" defaults instead. Fix: the tuned values now
+//           live under "shade" (2nd entry, right after "cover"), which
+//           auto-detection actually matches. "screen" is kept as its own
+//           entry (11th, before "window") with the same tuned values, for
+//           anyone using device_type: screen as a manual override for
+//           parity with chrono-slider-card's own naming - it can only ever
+//           be reached that way, never by auto-detection, since no real HA
+//           entity has that device_class.
 // v1.0.9: Fixed ccNormalizeFavoritePositions() to actually accept
 //          favorite_positions as a comma-separated string (e.g.
 //          "0, 25, 75, 100"), and added the {value:label} custom-label
@@ -209,17 +226,23 @@ const HANDLE_MARGIN_DIVISOR = 8;
 // or when an explicit device_type override in config doesn't match a
 // known key - it always represents the combination that mirrors HA's own
 // native slider (raw current_position used as-is, no inversion).
-// "screen" and "awning" carry the exact values chrono-slider-card already
-// defined for them. The remaining 7 entries are the real HA cover
-// device_class values not yet individually tuned - each is set equal to
-// "cover" as a deliberate placeholder, not a verified behavioral choice.
+// "shade" and "awning" carry the exact values chrono-slider-card already
+// defined for its own "Screen" and "Awning" device types. "screen" is not
+// a real HA cover device_class (verified real values: awning, blind,
+// curtain, damper, door, garage, gate, shade, shutter, window) so it's
+// kept here only as a manual device_type override for anyone typing it by
+// hand, same tuned values as "shade" - auto-detection can never reach it
+// since no real entity has that device_class. The remaining 7 entries are
+// real HA cover device_class values not yet individually tuned - each is
+// set equal to "cover" as a deliberate placeholder, not a verified
+// behavioral choice.
 const DEVICE_TYPE_DEFAULTS = {
   cover: {
     device_open_state: true,
     device_open_percentage: true,
     device_open_slider: true,
   },
-  screen: {
+  shade: {
     device_open_state: true,
     device_open_percentage: false,
     device_open_slider: false,
@@ -259,15 +282,15 @@ const DEVICE_TYPE_DEFAULTS = {
     device_open_percentage: true,
     device_open_slider: true,
   },
-  shade: {
-    device_open_state: true,
-    device_open_percentage: true,
-    device_open_slider: true,
-  },
   shutter: {
     device_open_state: true,
     device_open_percentage: true,
     device_open_slider: true,
+  },
+  screen: {
+    device_open_state: true,
+    device_open_percentage: false,
+    device_open_slider: false,
   },
   window: {
     device_open_state: true,
