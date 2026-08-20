@@ -43,9 +43,23 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.2.22';
+const CARD_VERSION = '1.2.23';
 
 // --- Version History ----------------------------------------------------
+// v1.2.23: Classname audit fix, in preparation for the (not-yet-started)
+//           popup shadow-root collapse. Every previously unclassed <svg>
+//           icon (open, stop, close, position-mode toggle, button-mode
+//           toggle, and the popup dialog's close button) now has its own
+//           unique classname, matching the existing convention already
+//           used for their <path> children (stop/position-mode/button-mode
+//           <path>s also gained matching classes; open-icon-path and
+//           close-icon-path were already present, unchanged). The popup
+//           dialog's own header title span is renamed .title -> .heading:
+//           <chrono-cover>'s own inner .title element already uses that
+//           exact name, and while today the two live in separate shadow
+//           roots (harmless), a collapsed single shadow root would make
+//           them collide. Purely additive/renaming - no layout, styling,
+//           or behavioral changes.
 // v1.2.22: styles: is no longer a flat, one-level-only map. Nested plain
 //           objects now produce CSS descendant selectors (space-separated,
 //           any depth) - e.g. styles: { slider: { handle: { color: red } } }
@@ -804,26 +818,26 @@ class ChronoCover extends HTMLElement {
             <div class="control-button-group">
               <button class="control-button control-button-open" aria-label="Open">
                 <div class="control-button-shade"></div>
-                <svg viewBox="0 0 24 24"><path class="open-icon-path" d=""></path></svg>
+                <svg class="open-icon" viewBox="0 0 24 24"><path class="open-icon-path" d=""></path></svg>
               </button>
               <button class="control-button control-button-stop" aria-label="Stop">
                 <div class="control-button-shade"></div>
-                <svg viewBox="0 0 24 24"><path d="${ICON_STOP}"></path></svg>
+                <svg class="stop-icon" viewBox="0 0 24 24"><path class="stop-icon-path" d="${ICON_STOP}"></path></svg>
               </button>
               <button class="control-button control-button-close" aria-label="Close">
                 <div class="control-button-shade"></div>
-                <svg viewBox="0 0 24 24"><path class="close-icon-path" d=""></path></svg>
+                <svg class="close-icon" viewBox="0 0 24 24"><path class="close-icon-path" d=""></path></svg>
               </button>
             </div>
           </div>
           <div class="icon-button-group">
             <button class="icon-toggle-button icon-toggle-button-position" aria-label="Position mode">
               <div class="icon-toggle-shade"></div>
-              <svg viewBox="0 0 24 24"><path d="${ICON_MENU}"></path></svg>
+              <svg class="position-mode-icon" viewBox="0 0 24 24"><path class="position-mode-icon-path" d="${ICON_MENU}"></path></svg>
             </button>
             <button class="icon-toggle-button icon-toggle-button-button" aria-label="Button mode">
               <div class="icon-toggle-shade"></div>
-              <svg viewBox="0 0 24 24"><path d="${ICON_SWAP_VERTICAL}"></path></svg>
+              <svg class="button-mode-icon" viewBox="0 0 24 24"><path class="button-mode-icon-path" d="${ICON_SWAP_VERTICAL}"></path></svg>
             </button>
           </div>
         </div>
@@ -1501,7 +1515,7 @@ class ChronoCoverPopupHost extends HTMLElement {
           align-items: center;
           padding: 0 8px;
         }
-        .title {
+        .heading {
           flex: 1;
           font-size: 24px;
           line-height: 2rem;
@@ -1543,9 +1557,9 @@ class ChronoCoverPopupHost extends HTMLElement {
         <div class="frame">
           <div class="header">
             <button class="close-button" aria-label="Close">
-              <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              <svg class="dismiss-icon" viewBox="0 0 24 24"><path class="dismiss-icon-path" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
-            <span class="title"></span>
+            <span class="heading"></span>
           </div>
           <div class="body"></div>
         </div>
@@ -1554,7 +1568,7 @@ class ChronoCoverPopupHost extends HTMLElement {
     const root = this.shadowRoot;
     this._overlayEl = root.querySelector('.overlay');
     this._closeButtonEl = root.querySelector('.close-button');
-    this._titleEl = root.querySelector('.title');
+    this._titleEl = root.querySelector('.heading');
     this._bodyEl = root.querySelector('.body');
     this._overlayEl.addEventListener('click', (e) => {
       if (e.target === this._overlayEl) this.close();
