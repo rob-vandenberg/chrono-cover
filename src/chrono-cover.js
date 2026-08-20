@@ -43,9 +43,28 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.6';
+const CARD_VERSION = '1.0.7';
 
 // --- Version History ----------------------------------------------------
+// v1.0.7: Pixel-aligned the state text, slider, and mode-toggle buttons
+//          against native HA's more-info dialog (measured directly by the
+//          user, overlaying both dialogs' close buttons as a shared
+//          origin point). state font-size default raised from 32px to
+//          36px, matching native's measured value. .state's own padding
+//          redistributed asymmetrically (top 4px->9px, bottom 4px->1px,
+//          both split from the same total split point rather than kept
+//          symmetric) so the state text shifts down by 5px while the net
+//          push onto .last-changed is only +2px, both effects produced by
+//          .state's own box alone - no properties on .last-changed
+//          touched, and no negative margins used anywhere, per rule
+//          against solving cascade side-effects with a downstream
+//          negative-margin patch rather than fixing them at their actual
+//          source. .control-slider-host given margin-top: 5px (previously
+//          unset, defaulted to 0 from .main-control > *'s shorthand).
+//          controls-gap default (drives .icon-button-group's existing
+//          margin-top) raised from 20px to 24px, the remaining +4px.
+//          .favorites required no changes - lands correctly once the
+//          above cascade through normal flow.
 // v1.0.6: Fixed favorite-position buttons wrapping to a second row.
 //          Root cause verified against native HA's own more-info dialog
 //          (div.groups, the native equivalent element): native has no
@@ -899,9 +918,9 @@ class ChronoCover extends HTMLElement {
       .state {
         font-style: normal;
         font-weight: var(--state-font-weight, 400);
-        font-size: var(--state-font-size, 32px);
+        font-size: var(--state-font-size, 36px);
         line-height: var(--state-line-height, 1.2);
-        padding: var(--state-padding-y, 4px) 0;
+        padding: var(--state-padding-top, 9px) 0 var(--state-padding-bottom, 1px) 0;
       }
       .percentage {
         font-style: normal;
@@ -1016,6 +1035,7 @@ class ChronoCover extends HTMLElement {
         width: 100%;
         min-width: var(--slider-min-width);
         max-width: var(--slider-max-width);
+        margin-top: 5px;
       }
       .control-slider-host.active {
         display: block;
@@ -1112,7 +1132,7 @@ class ChronoCover extends HTMLElement {
         flex-direction: row;
         align-items: center;
         height: var(--icon-button-group-height, 48px);
-        margin-top: var(--controls-gap, 20px);
+        margin-top: var(--controls-gap, 24px);
         border-radius: var(--icon-button-group-border-radius, 9999px);
         background-color: var(--icon-button-group-background, rgba(139, 145, 151, 0.1));
         box-sizing: border-box;
