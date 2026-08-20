@@ -43,9 +43,21 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.2.20';
+const CARD_VERSION = '1.2.21';
 
 // --- Version History ----------------------------------------------------
+// v1.2.21: .slider-track's border-radius now uses inherit instead of
+//           var(--slider-border-radius) directly. .slider-track is the
+//           element that's actually visible (it clips the rounded shape),
+//           but .slider is the box a person overrides via styles: - a
+//           plain border-radius: 8px on .slider (as opposed to the
+//           --slider-border-radius custom property, which does cascade
+//           normally) never reached .slider-track, since regular CSS
+//           properties don't inherit by default. border-radius: inherit
+//           picks up .slider's own computed value however it was set -
+//           default, the variable, or a direct literal override - so both
+//           forms now work identically. Same "outer box is the boss"
+//           principle as v1.2.20's width fix, applied to border-radius.
 // v1.2.20: Slider restructured so .slider is the single outer, authoritative
 //           box - styles: slider: { width: ... } (or min-width/max-width/
 //           height) now works directly, matching what anyone would guess
@@ -1177,7 +1189,7 @@ class ChronoCover extends HTMLElement {
         position: absolute;
         inset: 0;
         overflow: hidden;
-        border-radius: var(--slider-border-radius);
+        border-radius: inherit;
       }
       .slider-track-background {
         position: absolute;
