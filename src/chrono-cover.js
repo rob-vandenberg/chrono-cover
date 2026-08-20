@@ -43,9 +43,24 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.2.21';
+const CARD_VERSION = '1.2.22';
 
 // --- Version History ----------------------------------------------------
+// v1.2.22: styles: is no longer a flat, one-level-only map. Nested plain
+//           objects now produce CSS descendant selectors (space-separated,
+//           any depth) - e.g. styles: { slider: { handle: { color: red } } }
+//           now produces ".slider .handle { color: red; }". "host" -> ":host"
+//           and the "popup" skip-key both still only apply at the top level;
+//           deeper than that they're literal (if unlikely) classname
+//           segments. Every classname at every level always emits its own
+//           rule, even with zero direct declarations (e.g. .slider {  }
+//           alongside .slider .handle {...} in the example above) - an
+//           empty block is still valid CSS and may be a deliberate,
+//           temporary no-op while testing. ccBuildUserStylesCss() is now a
+//           thin wrapper around a new recursive helper,
+//           ccBuildUserStylesRules(); both existing call sites
+//           (ChronoCover.setConfig(), ChronoCoverPopupHost.open()) are
+//           unchanged.
 // v1.2.21: .slider-track's border-radius now uses inherit instead of
 //           var(--slider-border-radius) directly. .slider-track is the
 //           element that's actually visible (it clips the rounded shape),
@@ -546,26 +561,43 @@ function ccToKebab(str) {
   return String(str).replace(/_/g, '-');
 }
 
-// Converts a flat { class_name: { property: value } } object - a styles:
-// block, or the nested "popup" object within one - into ready-to-adopt CSS
-// text. "host" is the one reserved key: it targets :host, since there is no
-// element with class="host" to reach the normal way. Every other key is
-// treated as a real, already-present class name (e.g. "ha_card" reaches
-// <ha-card class="ha-card">) - same convention as chrono-slider-card.
-// skipKey, if given, is left out entirely - used to keep "popup" out of the
-// control element's own stylesheet, since that key belongs to the popup host.
-function ccBuildUserStylesCss(stylesConfig, skipKey) {
-  let css = '';
-  for (const [className, props] of Object.entries(stylesConfig)) {
-    if (skipKey && className === skipKey) continue;
-    if (!props || typeof props !== 'object' || Array.isArray(props)) continue;
-    const declarations = Object.entries(props)
-      .map(([prop, value]) => `${ccToKebab(prop)}: ${value};`)
-      .join(' ');
-    const selector = className === 'host' ? ':host' : `.${ccToKebab(className)}`;
-    css += `${selector} { ${declarations} }\n`;
+// Converts a styles: block - now nestable to any depth - into ready-to-adopt
+// CSS text. Each key at each level is classified by its value: a plain
+// object (not an array) is a nested classname, appended as a new descendant-
+// selector segment (space-separated, e.g. ".slider .handle") and recursed
+// into; a primitive (string/number) is a real CSS declaration on the
+// selector path built so far. "host" -> ":host" and skipKey (used to keep
+// "popup" out of the control element's own stylesheet - that key belongs to
+// the popup host) both only apply at the top level (empty selectorPath);
+// deeper than that they're literal, ordinary classname segments. Every
+// classname at every level always emits its own rule, even with zero direct
+// declarations - an empty block is still valid CSS and may be a deliberate,
+// temporary no-op while a person is testing. A bare top-level primitive with
+// no wrapping classname (styles: { color: red }) is silently ignored, same
+// as the old flat version's behavior.
+function ccBuildUserStylesRules(props, skipKey, selectorPath) {
+  const rules = [];
+  let declarations = '';
+  for (const [key, value] of Object.entries(props)) {
+    if (selectorPath.length === 0 && skipKey && key === skipKey) continue;
+    const isNestedClass = value && typeof value === 'object' && !Array.isArray(value);
+    if (isNestedClass) {
+      const segment = selectorPath.length === 0 && key === 'host' ? ':host' : `.${ccToKebab(key)}`;
+      rules.push(...ccBuildUserStylesRules(value, skipKey, [...selectorPath, segment]));
+    } else if (selectorPath.length > 0) {
+      declarations += `${ccToKebab(key)}: ${value}; `;
+    }
+    // else: bare top-level non-object value with no wrapping classname -
+    // silently ignored, matches old behavior.
   }
-  return css;
+  if (selectorPath.length > 0) {
+    rules.push(`${selectorPath.join(' ')} { ${declarations.trim()} }`);
+  }
+  return rules;
+}
+
+function ccBuildUserStylesCss(stylesConfig, skipKey) {
+  return ccBuildUserStylesRules(stylesConfig, skipKey, []).join('\n');
 }
 
 // --- Custom element --------------------------------------------------------------
