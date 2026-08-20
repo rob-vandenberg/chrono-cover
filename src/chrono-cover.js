@@ -43,9 +43,20 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.1.11';
+const CARD_VERSION = '1.1.12';
 
 // --- Version History ----------------------------------------------------
+// v1.1.12: Popup header title now falls back to the entity's own
+//           friendly_name (then the entity id itself, as a last resort)
+//           when no explicit title is given in data:. Mirrors the
+//           fallback priority ChronoCover's own inner title already had
+//           (config.name || entity.attributes.friendly_name ||
+//           this._config.entity) - added here because the popup's own
+//           default show_name: false hides that inner title in this
+//           context, so the popup header previously had no fallback of
+//           its own and rendered blank. Looked up once per open() call via
+//           the already-fetched hass object - no change to ChronoCover's
+//           own title logic.
 // v1.1.11: Changed two defaults. DEFAULT_SHOW_LAST_CHANGED: true -> false
 //           (the relative-time label is now hidden by default). ha-card's
 //           own default styling now includes border: none (flat property,
@@ -1506,7 +1517,17 @@ class ChronoCoverPopupHost extends HTMLElement {
   open(data) {
     if (!this.shadowRoot) this.connectedCallback();
     const { title, close_align, title_align, ...rawConfig } = data || {};
-    this._titleEl.textContent = title || '';
+    // Same fallback priority ChronoCover's own inner title already uses
+    // (config.name || entity's friendly_name || the entity id itself) -
+    // mirrored here for the popup header, since the popup's default
+    // show_name: false hides ChronoCover's own title in this context.
+    let resolvedTitle = title;
+    if (!resolvedTitle && rawConfig.entity) {
+      const hass = this._getHass();
+      const entity = hass && hass.states[rawConfig.entity];
+      resolvedTitle = (entity && entity.attributes.friendly_name) || rawConfig.entity;
+    }
+    this._titleEl.textContent = resolvedTitle || '';
 
     const closeAlign = ccResolveAlignOption(close_align, CLOSE_ALIGN_VALUES, 'close_align');
     const titleAlign = ccResolveAlignOption(title_align, TITLE_ALIGN_VALUES, 'title_align');

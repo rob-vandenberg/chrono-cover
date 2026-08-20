@@ -150,11 +150,11 @@ tap_action:
 | `entity` | text | required | The `cover` entity to control. |
 | `name` | text | (none) | A custom name to show above the popup content. Leave it out to use the entity's own name. |
 | `show_name` | `true`/`false` | `true` | Shows the name. When using the built-in popup, this is automatically turned off by default (the popup header already shows the title) - set it explicitly to `true` if you want it shown anyway. |
-| `device_type` | `cover`/`screen`/`awning` | (auto, from entity) | Tells Chrono Cover what "open" actually means for your device. For `screen` and `awning`, the percentage and the slider always represent how far the device is physically extended - 100% is always fully extended, no matter which end is labeled "open." `cover` mirrors Home Assistant's own native position value directly (100% = fully retracted). Leave this out and Chrono Cover picks it up automatically from the entity's own device class ("Show as" field in the entity's settings); set it only to override that. |
-| `favorite_positions` | list of numbers | `[0, 25, 75, 100]` | The one-tap favorite positions shown below the slider. Any number of entries is supported, each a plain percentage (e.g. `50`), shown as `50%`. |
+| `device_type` | text | (auto, from entity) | Tells Chrono Cover what "open" actually means for your device. Leave this out (recommended) and Chrono Cover reads it automatically from the entity's own device class ("Show as" field in the entity's settings). `shade` and `awning` are individually tuned - for these, the percentage and slider always represent how far the device is physically extended, 100% is always fully extended, no matter which end is labeled "open." Every other real device class currently behaves the same as `cover` (Home Assistant's own native position value, 100% = fully retracted) until it's individually tuned too. Set this explicitly only to override the auto-detected value - accepts any real device class, plus `screen`, a manual-only alias with the same tuned behavior as `shade` (not a real Home Assistant device class, so it's never auto-detected). |
+| `favorite_positions` | list, or text | `[0, 25, 75, 100]` | The one-tap favorite positions shown below the slider. Any number of entries is supported. Write it as a YAML list (`[0, 25, 75, 100]`), or as plain comma-separated text (`0, 25, 75, 100`) - both work the same. Each entry is a plain percentage (e.g. `50`), shown as `50%`, or a custom label using `{value:label}` (e.g. `{0:Close}`), which shows the label as-typed instead of a percentage. |
 | `show_state` | `true`/`false` | `true` | Shows the "Opened"/"Closed"/"Opening"/"Closing" text. |
 | `show_percentage` | `true`/`false` | `true` | Shows the position percentage under the state text. |
-| `show_last_changed` | `true`/`false` | `true` | Shows the relative-time label under the state text (e.g. "3 hours ago"). |
+| `show_last_changed` | `true`/`false` | `false` | Shows the relative-time label under the state text (e.g. "3 hours ago"). |
 | `show_controls` | `true`/`false` | `true` | Shows the entire controls area - the slider, directional buttons, and the slider/buttons switch toggle - together. Turn off to show only favorites (and any name/state/percentage/last-changed) - useful for a favorites-only layout. |
 | `show_control_switch_buttons` | `true`/`false` | `true` | Shows the toggle icons that switch between the slider and the open/stop/close buttons. |
 | `show_favorites` | `true`/`false` | `true` | Shows the row of favorite-position buttons. |
@@ -163,19 +163,19 @@ tap_action:
 
 Using a key that isn't in this list, or a value that isn't valid, won't break anything - it's just ignored.
 
-**Advanced:** if `device_type` doesn't quite match your specific device, you can override the three things it controls individually, directly in YAML: `device_open_state`, `device_open_percentage`, and `device_open_slider` (each `true`/`false`). These are an escape hatch for the rare device that doesn't fit `cover`, `screen`, or `awning` exactly. Most people will never need them.
+**Advanced:** if the auto-detected (or overridden) device type doesn't quite match your specific device, you can override the three things it controls individually, directly in YAML: `device_open_state`, `device_open_percentage`, and `device_open_slider` (each `true`/`false`). These are an escape hatch for the rare device that doesn't fit its device class' current default exactly. Most people will never need them.
 
 **Popup-only options** (only apply when using the built-in `fire-dom-event` trigger - `title` is placed at the top of `data:`, alongside the rest of your config, not nested):
 
 | Key | Type | Default | What it does |
 | :--- | :--- | :--- | :--- |
-| `title` | text | (none) | The text shown in the popup header, above the controls. |
+| `title` | text | Entity's own name | The text shown in the popup header, above the controls. Leave it out and Chrono Cover uses the entity's own name (`friendly_name`, or failing that the entity id) instead. |
 | `close_align` | `left`/`right`/`hidden` | `left` | Which side of the popup header the close button sits on. `hidden` removes it entirely - you can still dismiss the popup by tapping outside it or pressing Escape. |
 | `title_align` | `left`/`right`/`center`/`hidden` | `left` | How the popup title is aligned. `hidden` removes the title text entirely. The title always uses the full width the close button doesn't occupy, whichever side that button is on. |
 
 ### 🎨 Custom Styling
 
-Every visual piece of the popup can be restyled directly from your dashboard config, without touching the source or your browser's dev tools. Under `styles:`, each entry is a CSS class name paired with the CSS properties you want to change on it:
+Every visual piece of the popup can be restyled directly from your dashboard config, without touching the source or your browser's dev tools. Under `styles:`, each entry is a CSS class name paired with the CSS properties you want to change on it. For example, the card itself has no border by default - add one back the same way as any other property:
 
 ```yaml
 tap_action:
@@ -186,7 +186,7 @@ tap_action:
       entity: cover.living_room_blind
       styles:
         ha_card:
-          border: none
+          border: 1px solid var(--divider-color)
         slider:
           border-width: 2px
           border-style: solid
