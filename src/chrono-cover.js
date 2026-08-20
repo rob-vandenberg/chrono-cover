@@ -43,9 +43,31 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.4';
+const CARD_VERSION = '1.0.5';
 
 // --- Version History ----------------------------------------------------
+// v1.0.5: Popup dialog chrome brought in line with native HA more-info
+//          dialog measurements (chrome only - the slider control itself is
+//          unchanged and out of scope for this comparison). .frame default
+//          max-width raised from 420px to 580px (matches native's fixed
+//          580px dialog width, also resolves favorites wrapping to 2 rows
+//          instead of 1). .frame default border-radius lowered from 28px
+//          to 24px (matches native exactly). Popup host's open() now
+//          injects show_name: false into the config handed to
+//          ChronoCover.setConfig() unless the caller's own data: already
+//          sets show_name explicitly - removes the duplicate title (popup
+//          header already shows it; ChronoCover's own .title became
+//          redundant only in this context, so the change is scoped to the
+//          popup host, not a global default). .header restructured from a
+//          single title span with an absolutely-positioned close button
+//          into a flex row - close button first (left), title second -
+//          replacing the absolute positioning so the two can never
+//          overlap regardless of title length. Close button remains
+//          left-only and title remains left-aligned-following; the
+//          previously-discussed configurable close-button-side/title-
+//          alignment mechanism (planned to be ported from chrono-popup,
+//          which already solves this generally) is explicitly deferred,
+//          not attempted here.
 // v1.0.4: Added the styles: config option, ported from chrono-slider-card -
 //          a flat { class_name: { property: value } } block converted to
 //          CSS and adopted as a stylesheet, so overrides reliably win
@@ -1242,19 +1264,20 @@ class ChronoCoverPopupHost extends HTMLElement {
           position: relative;
           box-sizing: border-box;
           width: 90vw;
-          max-width: var(--chrono-cover-popup-max-width, 420px);
+          max-width: var(--chrono-cover-popup-max-width, 580px);
           margin-top: var(--chrono-cover-popup-margin-top, 10vh);
           background: var(--chrono-cover-popup-background, var(--card-background-color, #1c1c1c));
-          border-radius: var(--chrono-cover-popup-border-radius, var(--ha-dialog-border-radius, 28px));
+          border-radius: var(--chrono-cover-popup-border-radius, var(--ha-dialog-border-radius, 24px));
           box-shadow: var(--chrono-cover-popup-box-shadow, 0 8px 32px rgba(0, 0, 0, 0.5));
           font-family: var(--paper-font-body1_-_font-family, inherit);
         }
         .header {
           display: flex;
           align-items: center;
-          padding: 20px 20px 12px 20px;
+          padding: 0 8px;
         }
         .title {
+          flex: 1;
           font-size: 24px;
           line-height: 2rem;
           font-weight: 400;
@@ -1264,21 +1287,19 @@ class ChronoCoverPopupHost extends HTMLElement {
           text-overflow: ellipsis;
         }
         .close-button {
+          flex: none;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          position: absolute;
-          z-index: 1;
-          top: 18px;
-          right: 20px;
           background: none;
           border: none;
           color: var(--primary-text-color, #fff);
-          width: 24px;
-          height: 24px;
-          padding: 0;
+          width: 48px;
+          height: 48px;
+          padding: 12px;
           border-radius: 50%;
+          box-sizing: border-box;
         }
         .close-button:hover {
           background: rgba(255, 255, 255, 0.1);
@@ -1295,10 +1316,12 @@ class ChronoCoverPopupHost extends HTMLElement {
       </style>
       <div class="overlay">
         <div class="frame">
-          <button class="close-button" aria-label="Close">
-            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-          </button>
-          <div class="header"><span class="title"></span></div>
+          <div class="header">
+            <button class="close-button" aria-label="Close">
+              <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+            <span class="title"></span>
+          </div>
           <div class="body"></div>
         </div>
       </div>
@@ -1323,8 +1346,15 @@ class ChronoCoverPopupHost extends HTMLElement {
 
   open(data) {
     if (!this.shadowRoot) this.connectedCallback();
-    const { title, ...config } = data || {};
+    const { title, ...rawConfig } = data || {};
     this._titleEl.textContent = title || '';
+
+    // The popup header above already shows the title - ChronoCover's own
+    // .title becomes a duplicate in this context only. Only applied here
+    // (popup host), not as a global default, since a standalone/browser_mod
+    // placement still wants its own title. A caller's own explicit
+    // show_name in data: always wins.
+    const config = { show_name: false, ...rawConfig };
 
     const stylesConfig =
       config.styles && typeof config.styles === 'object' && !Array.isArray(config.styles) ? config.styles : {};
