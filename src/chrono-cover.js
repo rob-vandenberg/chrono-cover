@@ -43,9 +43,29 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.0.7';
+const CARD_VERSION = '1.0.8';
 
 // --- Version History ----------------------------------------------------
+// v1.0.8: Added close_align ('left' default | 'right' | 'hidden') and
+//          title_align ('left' default | 'right' | 'center' | 'hidden')
+//          config options, read by the popup host in open(). Close button
+//          side is set via the CSS order property on the existing flex
+//          .header row (title already has flex: 1, so it always claims
+//          the full remaining width - never a reserved/symmetric track -
+//          meaning no gap is ever left on the side opposite the button,
+//          regardless of which combination of alignments is chosen).
+//          Invalid values fall back to 'left' with a console.warn.
+//          Explicitly reset on every open() call, not just when a
+//          non-default value is given, since the popup host is a
+//          singleton reused across every popup invocation - otherwise a
+//          previous popup's right/hidden setting would leak into the next
+//          one that didn't specify it. Snake_case only for now (matching
+//          every other existing option); kebab-case dual-notation
+//          acceptance deliberately deferred, not attempted here. Existing
+//          click-outside-backdrop and Escape-key dismissal (both already
+//          unconditional, unchanged) verified sufficient for the
+//          close_align: hidden case - no one can be stranded without a
+//          visible close button.
 // v1.0.7: Pixel-aligned the state text, slider, and mode-toggle buttons
 //          against native HA's more-info dialog (measured directly by the
 //          user, overlaying both dialogs' close buttons as a shared
@@ -1268,6 +1288,19 @@ customElements.define('chrono-cover', ChronoCover);
 
 const EVENT_KEY = 'chrono-cover';
 
+// Valid values for close_align / title_align, each defaulting to "left".
+// Invalid supplied values fall back to "left" via ccResolveAlignOption(),
+// with a console.warn().
+const CLOSE_ALIGN_VALUES = ['left', 'right', 'hidden'];
+const TITLE_ALIGN_VALUES = ['left', 'right', 'center', 'hidden'];
+
+function ccResolveAlignOption(value, validValues, optionName) {
+  if (value === undefined) return 'left';
+  if (validValues.includes(value)) return value;
+  console.warn(`chrono-cover: invalid ${optionName} "${value}", defaulting to "left".`);
+  return 'left';
+}
+
 class ChronoCoverPopupHost extends HTMLElement {
   constructor() {
     super();
@@ -1379,6 +1412,7 @@ class ChronoCoverPopupHost extends HTMLElement {
     `;
     const root = this.shadowRoot;
     this._overlayEl = root.querySelector('.overlay');
+    this._closeButtonEl = root.querySelector('.close-button');
     this._titleEl = root.querySelector('.title');
     this._bodyEl = root.querySelector('.body');
     this._overlayEl.addEventListener('click', (e) => {
@@ -1397,8 +1431,19 @@ class ChronoCoverPopupHost extends HTMLElement {
 
   open(data) {
     if (!this.shadowRoot) this.connectedCallback();
-    const { title, ...rawConfig } = data || {};
+    const { title, close_align, title_align, ...rawConfig } = data || {};
     this._titleEl.textContent = title || '';
+
+    const closeAlign = ccResolveAlignOption(close_align, CLOSE_ALIGN_VALUES, 'close_align');
+    const titleAlign = ccResolveAlignOption(title_align, TITLE_ALIGN_VALUES, 'title_align');
+    // Explicitly reset every property on every open() call, not just when
+    // a non-default value is given - this host is a singleton reused
+    // across every popup invocation, so a previous popup's right/hidden
+    // setting must never leak into the next one that didn't specify it.
+    this._closeButtonEl.style.order = closeAlign === 'right' ? '1' : '0';
+    this._closeButtonEl.style.display = closeAlign === 'hidden' ? 'none' : '';
+    this._titleEl.style.textAlign = titleAlign === 'hidden' ? '' : titleAlign;
+    this._titleEl.style.display = titleAlign === 'hidden' ? 'none' : '';
 
     // The popup header above already shows the title - ChronoCover's own
     // .title becomes a duplicate in this context only. Only applied here
