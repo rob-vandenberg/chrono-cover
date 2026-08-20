@@ -43,9 +43,30 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.2.23';
+const CARD_VERSION = '1.3.30';
 
 // --- Version History ----------------------------------------------------
+// v1.3.30: Popup shadow-root collapse. <chrono-cover-popup-host> is gone -
+//           <chrono-cover> now builds its own popup chrome (overlay/frame/
+//           header/heading/close-button/body) directly inside its own
+//           existing shadow root via two new methods, openAsPopup() and
+//           close(), instead of a second custom element with a second
+//           shadow root. There is no longer a permanent, app-wide singleton
+//           host element living in document.body - the ll-custom listener
+//           now creates a fresh <chrono-cover> per popup open and removes
+//           it entirely on close, matching what was already true of the
+//           popup's inner content before this version (already rebuilt/
+//           discarded every open, just previously wrapped by a persistent
+//           outer shell). subscribeEvents live-update wiring and Escape-key
+//           dismissal moved from the old host onto ChronoCover itself,
+//           scoped per-instance rather than per-singleton.
+//           BREAKING CONFIG CHANGE: the "popup" skip-key in styles: is
+//           removed - it existed only to route styles.popup to a second,
+//           separate shadow root, which no longer exists. Popup-chrome
+//           classnames (frame, header, heading, close-button, overlay,
+//           body) are now reached directly at the top level of styles:,
+//           the same as every other classname - "styles: popup: { frame:
+//           ... } }" must become "styles: { frame: ... } }".
 // v1.2.23: Classname audit fix, in preparation for the (not-yet-started)
 //           popup shadow-root collapse. Every previously unclassed <svg>
 //           icon (open, stop, close, position-mode toggle, button-mode
@@ -575,29 +596,26 @@ function ccToKebab(str) {
   return String(str).replace(/_/g, '-');
 }
 
-// Converts a styles: block - now nestable to any depth - into ready-to-adopt
+// Converts a styles: block - nestable to any depth - into ready-to-adopt
 // CSS text. Each key at each level is classified by its value: a plain
 // object (not an array) is a nested classname, appended as a new descendant-
 // selector segment (space-separated, e.g. ".slider .handle") and recursed
 // into; a primitive (string/number) is a real CSS declaration on the
-// selector path built so far. "host" -> ":host" and skipKey (used to keep
-// "popup" out of the control element's own stylesheet - that key belongs to
-// the popup host) both only apply at the top level (empty selectorPath);
-// deeper than that they're literal, ordinary classname segments. Every
-// classname at every level always emits its own rule, even with zero direct
-// declarations - an empty block is still valid CSS and may be a deliberate,
-// temporary no-op while a person is testing. A bare top-level primitive with
-// no wrapping classname (styles: { color: red }) is silently ignored, same
-// as the old flat version's behavior.
-function ccBuildUserStylesRules(props, skipKey, selectorPath) {
+// selector path built so far. "host" -> ":host" only applies at the top
+// level (empty selectorPath); deeper than that it's a literal, ordinary
+// classname segment. Every classname at every level always emits its own
+// rule, even with zero direct declarations - an empty block is still valid
+// CSS and may be a deliberate, temporary no-op while a person is testing.
+// A bare top-level primitive with no wrapping classname (styles: { color:
+// red }) is silently ignored, same as the old flat version's behavior.
+function ccBuildUserStylesRules(props, selectorPath) {
   const rules = [];
   let declarations = '';
   for (const [key, value] of Object.entries(props)) {
-    if (selectorPath.length === 0 && skipKey && key === skipKey) continue;
     const isNestedClass = value && typeof value === 'object' && !Array.isArray(value);
     if (isNestedClass) {
       const segment = selectorPath.length === 0 && key === 'host' ? ':host' : `.${ccToKebab(key)}`;
-      rules.push(...ccBuildUserStylesRules(value, skipKey, [...selectorPath, segment]));
+      rules.push(...ccBuildUserStylesRules(value, [...selectorPath, segment]));
     } else if (selectorPath.length > 0) {
       declarations += `${ccToKebab(key)}: ${value}; `;
     }
@@ -610,8 +628,8 @@ function ccBuildUserStylesRules(props, skipKey, selectorPath) {
   return rules;
 }
 
-function ccBuildUserStylesCss(stylesConfig, skipKey) {
-  return ccBuildUserStylesRules(stylesConfig, skipKey, []).join('\n');
+function ccBuildUserStylesCss(stylesConfig) {
+  return ccBuildUserStylesRules(stylesConfig, []).join('\n');
 }
 
 // --- Custom element --------------------------------------------------------------
@@ -644,10 +662,10 @@ class ChronoCover extends HTMLElement {
       console.warn('chrono-cover: "styles" must be an object, ignoring.');
       stylesConfig = {};
     }
-    // "popup" is skipped here - it belongs to the popup host's own
-    // stylesheet, not this element's. It's read directly off config.styles
-    // in ChronoCoverPopupHost.open(), before this element even exists.
-    this._userStyleSheet.replaceSync(ccBuildUserStylesCss(stylesConfig || {}, 'popup'));
+    // Popup-chrome classnames (frame, header, heading, close-button,
+    // overlay, body) now live in this same shadow root and stylesheet -
+    // no separate skip-key routing needed since the collapse in v1.3.30.
+    this._userStyleSheet.replaceSync(ccBuildUserStylesCss(stylesConfig || {}));
 
     this._showName = config.show_name !== undefined ? config.show_name === true : DEFAULT_SHOW_NAME;
     this._showState = config.show_state !== undefined ? config.show_state === true : DEFAULT_SHOW_STATE;
@@ -724,6 +742,106 @@ class ChronoCover extends HTMLElement {
   disconnectedCallback() {
     if (this._relativeTimeInterval) clearInterval(this._relativeTimeInterval);
     this._teardownDragListeners();
+  }
+
+  // Builds the popup chrome (overlay/frame/header/heading/close-button/
+  // body) directly inside this element's own existing shadow root and
+  // appends this element to document.body - collapses what used to be a
+  // second custom element with a second shadow root (v1.3.30). Assumes
+  // setConfig() was already attempted by the caller; errorMessage is
+  // passed in explicitly for the case where setConfig() threw (e.g. a
+  // missing entity), since this method can't call setConfig() itself
+  // without also duplicating its own try/catch responsibility.
+  openAsPopup(title, closeAlign, titleAlign, errorMessage) {
+    const hasControl = !!this.shadowRoot;
+    if (!hasControl) {
+      this.attachShadow({ mode: 'open' });
+      this.shadowRoot.adoptedStyleSheets = [this._stateStyleSheet, this._userStyleSheet];
+      this.shadowRoot.innerHTML = `<style>${ChronoCover._css()}</style>`;
+    }
+    const root = this.shadowRoot;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="frame">
+        <div class="header">
+          <button class="close-button" aria-label="Close">
+            <svg class="dismiss-icon" viewBox="0 0 24 24"><path class="dismiss-icon-path" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <span class="heading"></span>
+        </div>
+        <div class="body"></div>
+      </div>
+    `;
+    const bodyEl = overlay.querySelector('.body');
+    if (hasControl) {
+      bodyEl.appendChild(root.querySelector('.ha-card'));
+    } else {
+      bodyEl.textContent = errorMessage || '';
+    }
+    root.appendChild(overlay);
+
+    // Same fallback priority ChronoCover's own inner title already uses
+    // (an explicit title, then the entity's friendly_name, then the
+    // entity id itself).
+    const headingEl = overlay.querySelector('.heading');
+    let resolvedTitle = title;
+    if (!resolvedTitle && this._config && this._config.entity) {
+      resolvedTitle = (this._entity && this._entity.attributes.friendly_name) || this._config.entity;
+    }
+    headingEl.textContent = resolvedTitle || '';
+
+    const closeButtonEl = overlay.querySelector('.close-button');
+    const resolvedCloseAlign = ccResolveAlignOption(closeAlign, CLOSE_ALIGN_VALUES, 'close_align');
+    const resolvedTitleAlign = ccResolveAlignOption(titleAlign, TITLE_ALIGN_VALUES, 'title_align');
+    closeButtonEl.style.order = resolvedCloseAlign === 'right' ? '1' : '0';
+    closeButtonEl.style.display = resolvedCloseAlign === 'hidden' ? 'none' : '';
+    headingEl.style.textAlign = resolvedTitleAlign === 'hidden' ? '' : resolvedTitleAlign;
+    headingEl.style.display = resolvedTitleAlign === 'hidden' ? 'none' : '';
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this.close();
+    });
+    closeButtonEl.addEventListener('click', () => this.close());
+    this._boundPopupKeydown = (e) => {
+      if (e.key === 'Escape') this.close();
+    };
+    document.addEventListener('keydown', this._boundPopupKeydown);
+
+    document.body.appendChild(this);
+    requestAnimationFrame(() => overlay.classList.add('open'));
+
+    if (hasControl) this._subscribeToUpdates();
+  }
+
+  // Removes this element entirely - disconnectedCallback() (above) already
+  // clears the relative-time interval and drag listeners as a natural
+  // consequence of that removal, so this only needs to handle what's
+  // specific to the popup itself.
+  close() {
+    document.removeEventListener('keydown', this._boundPopupKeydown);
+    this._unsubscribeFromUpdates();
+    this.remove();
+  }
+
+  async _subscribeToUpdates() {
+    this._unsubscribeFromUpdates();
+    if (!this._hass || !this._hass.connection) return;
+    try {
+      this._unsub = await this._hass.connection.subscribeEvents(() => {
+        this.hass = ccGetHass();
+      }, 'state_changed');
+    } catch (err) {
+      console.warn('chrono-cover: could not subscribe to entity updates - popup will not update live', err);
+    }
+  }
+
+  _unsubscribeFromUpdates() {
+    if (typeof this._unsub === 'function') {
+      this._unsub();
+    }
+    this._unsub = null;
   }
 
   set hass(hass) {
@@ -1425,21 +1543,101 @@ class ChronoCover extends HTMLElement {
       .favorite-button.active .favorite-button-shade {
         background-color: var(--state-cover-active-color, var(--primary-color));
       }
+
+      /* --- Popup chrome (openAsPopup()) --------------------------------- */
+      .overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: var(--chrono-cover-popup-z-index, 10000);
+        background: var(--chrono-cover-popup-backdrop, rgba(0, 0, 0, 0.5));
+        align-items: flex-start;
+        justify-content: center;
+        overflow-y: auto;
+      }
+      .overlay.open {
+        display: flex;
+      }
+      .frame {
+        position: relative;
+        box-sizing: border-box;
+        width: 90vw;
+        max-width: var(--chrono-cover-popup-max-width, 580px);
+        margin-top: var(--chrono-cover-popup-margin-top, 10vh);
+        background: var(--chrono-cover-popup-background, var(--card-background-color, #1c1c1c));
+        border-radius: var(--chrono-cover-popup-border-radius, var(--ha-dialog-border-radius, 24px));
+        box-shadow: var(--chrono-cover-popup-box-shadow, 0 8px 32px rgba(0, 0, 0, 0.5));
+        font-family: var(--paper-font-body1_-_font-family, inherit);
+      }
+      /* Matches native HA's own reported behavior: below this viewport
+         width, native drops its floating-dialog chrome for an
+         edge-to-edge full-screen surface. Width/mechanism only - native's
+         vertical behavior was not verified in this session. */
+      @media (max-width: 450px) {
+        .frame {
+          width: 100vw;
+          max-width: 100vw;
+          margin-top: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+      }
+      .heading {
+        flex: 1;
+        font-size: 24px;
+        line-height: 2rem;
+        font-weight: 400;
+        color: var(--primary-text-color, #fff);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .close-button {
+        flex: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--primary-text-color, #fff);
+        width: 48px;
+        height: 48px;
+        padding: 12px;
+        border-radius: 50%;
+        box-sizing: border-box;
+      }
+      .close-button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .close-button svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        fill: currentColor;
+      }
+      .body {
+        padding: 0 0 12px 0;
+      }
     `;
   }
 }
 
 customElements.define('chrono-cover', ChronoCover);
 
-// --- Self-fired popup host -------------------------------------------------------
+// --- Popup dispatch (fire-dom-event) ---------------------------------------
 // Vanilla, self-contained - same architectural rule as ChronoCover itself.
-// Sits outside any dashboard's card tree (it's appended directly to
-// document.body), so it never receives .hass automatically the way a
-// placed card does. Obtained once at open() via the live <home-assistant>
-// element, then kept live for as long as the popup stays open via
-// hass.connection.subscribeEvents(..., 'state_changed') - a method
-// already exposed on the connection object HA's own frontend hands us,
-// requiring no import of its own.
+// No persistent singleton host element anymore (v1.3.30 - see version
+// history): a fresh <chrono-cover> is created per popup open and removed
+// entirely on close, via its own openAsPopup()/close() methods. hass is
+// obtained directly via the live <home-assistant> element, since a
+// dynamically-created element appended to document.body never receives
+// .hass automatically the way a placed card does.
 
 const EVENT_KEY = 'chrono-cover';
 
@@ -1456,241 +1654,36 @@ function ccResolveAlignOption(value, validValues, optionName) {
   return 'left';
 }
 
-class ChronoCoverPopupHost extends HTMLElement {
-  constructor() {
-    super();
-    // Holds a person's styles.popup overrides - separate from and adopted
-    // into a different shadow root than ChronoCover's own _userStyleSheet,
-    // since this popup frame and the <chrono-cover> element inside it are
-    // two distinct shadow trees. A single stylesheet can't cross that
-    // boundary, so each shadow root gets its own.
-    this._userStyleSheet = new CSSStyleSheet();
-  }
-
-  connectedCallback() {
-    if (this.shadowRoot) return;
-    this.attachShadow({ mode: 'open' });
-    this.shadowRoot.adoptedStyleSheets = [this._userStyleSheet];
-    this.shadowRoot.innerHTML = `
-      <style>
-        .overlay {
-          display: none;
-          position: fixed;
-          inset: 0;
-          z-index: var(--chrono-cover-popup-z-index, 10000);
-          background: var(--chrono-cover-popup-backdrop, rgba(0, 0, 0, 0.5));
-          align-items: flex-start;
-          justify-content: center;
-          overflow-y: auto;
-        }
-        .overlay.open {
-          display: flex;
-        }
-        .frame {
-          position: relative;
-          box-sizing: border-box;
-          width: 90vw;
-          max-width: var(--chrono-cover-popup-max-width, 580px);
-          margin-top: var(--chrono-cover-popup-margin-top, 10vh);
-          background: var(--chrono-cover-popup-background, var(--card-background-color, #1c1c1c));
-          border-radius: var(--chrono-cover-popup-border-radius, var(--ha-dialog-border-radius, 24px));
-          box-shadow: var(--chrono-cover-popup-box-shadow, 0 8px 32px rgba(0, 0, 0, 0.5));
-          font-family: var(--paper-font-body1_-_font-family, inherit);
-        }
-        /* Matches native HA's own reported behavior: below this viewport
-           width, native drops its floating-dialog chrome for an
-           edge-to-edge full-screen surface. Width/mechanism only - native's
-           vertical behavior was not verified in this session. */
-        @media (max-width: 450px) {
-          .frame {
-            width: 100vw;
-            max-width: 100vw;
-            margin-top: 0;
-            border-radius: 0;
-            box-shadow: none;
-          }
-        }
-        .header {
-          display: flex;
-          align-items: center;
-          padding: 0 8px;
-        }
-        .heading {
-          flex: 1;
-          font-size: 24px;
-          line-height: 2rem;
-          font-weight: 400;
-          color: var(--primary-text-color, #fff);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .close-button {
-          flex: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: none;
-          border: none;
-          color: var(--primary-text-color, #fff);
-          width: 48px;
-          height: 48px;
-          padding: 12px;
-          border-radius: 50%;
-          box-sizing: border-box;
-        }
-        .close-button:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-        .close-button svg {
-          display: block;
-          width: 100%;
-          height: 100%;
-          fill: currentColor;
-        }
-        .body {
-          padding: 0 0 12px 0;
-        }
-      </style>
-      <div class="overlay">
-        <div class="frame">
-          <div class="header">
-            <button class="close-button" aria-label="Close">
-              <svg class="dismiss-icon" viewBox="0 0 24 24"><path class="dismiss-icon-path" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-            </button>
-            <span class="heading"></span>
-          </div>
-          <div class="body"></div>
-        </div>
-      </div>
-    `;
-    const root = this.shadowRoot;
-    this._overlayEl = root.querySelector('.overlay');
-    this._closeButtonEl = root.querySelector('.close-button');
-    this._titleEl = root.querySelector('.heading');
-    this._bodyEl = root.querySelector('.body');
-    this._overlayEl.addEventListener('click', (e) => {
-      if (e.target === this._overlayEl) this.close();
-    });
-    root.querySelector('.close-button').addEventListener('click', () => this.close());
-    this._boundKeydown = (e) => {
-      if (e.key === 'Escape') this.close();
-    };
-  }
-
-  _getHass() {
-    const ha = document.querySelector('home-assistant');
-    return ha ? ha.hass : undefined;
-  }
-
-  open(data) {
-    if (!this.shadowRoot) this.connectedCallback();
-    const { title, close_align, title_align, ...rawConfig } = data || {};
-    // Same fallback priority ChronoCover's own inner title already uses
-    // (config.name || entity's friendly_name || the entity id itself) -
-    // mirrored here for the popup header, since the popup's default
-    // show_name: false hides ChronoCover's own title in this context.
-    let resolvedTitle = title;
-    if (!resolvedTitle && rawConfig.entity) {
-      const hass = this._getHass();
-      const entity = hass && hass.states[rawConfig.entity];
-      resolvedTitle = (entity && entity.attributes.friendly_name) || rawConfig.entity;
-    }
-    this._titleEl.textContent = resolvedTitle || '';
-
-    const closeAlign = ccResolveAlignOption(close_align, CLOSE_ALIGN_VALUES, 'close_align');
-    const titleAlign = ccResolveAlignOption(title_align, TITLE_ALIGN_VALUES, 'title_align');
-    // Explicitly reset every property on every open() call, not just when
-    // a non-default value is given - this host is a singleton reused
-    // across every popup invocation, so a previous popup's right/hidden
-    // setting must never leak into the next one that didn't specify it.
-    this._closeButtonEl.style.order = closeAlign === 'right' ? '1' : '0';
-    this._closeButtonEl.style.display = closeAlign === 'hidden' ? 'none' : '';
-    this._titleEl.style.textAlign = titleAlign === 'hidden' ? '' : titleAlign;
-    this._titleEl.style.display = titleAlign === 'hidden' ? 'none' : '';
-
-    // The popup header above already shows the title - ChronoCover's own
-    // .title becomes a duplicate in this context only. Only applied here
-    // (popup host), not as a global default, since a standalone/browser_mod
-    // placement still wants its own title. A caller's own explicit
-    // show_name in data: always wins.
-    const config = { show_name: false, ...rawConfig };
-
-    const stylesConfig =
-      config.styles && typeof config.styles === 'object' && !Array.isArray(config.styles) ? config.styles : {};
-    const popupStyles =
-      stylesConfig.popup && typeof stylesConfig.popup === 'object' && !Array.isArray(stylesConfig.popup)
-        ? stylesConfig.popup
-        : {};
-    this._userStyleSheet.replaceSync(ccBuildUserStylesCss(popupStyles));
-
-    this._bodyEl.innerHTML = '';
-    const el = document.createElement('chrono-cover');
-    try {
-      el.setConfig(config);
-    } catch (err) {
-      this._bodyEl.textContent = `chrono-cover: ${err.message}`;
-      this._coverEl = null;
-      this._overlayEl.classList.add('open');
-      document.addEventListener('keydown', this._boundKeydown);
-      return;
-    }
-    el.hass = this._getHass();
-    this._bodyEl.appendChild(el);
-    this._coverEl = el;
-
-    this._overlayEl.classList.add('open');
-    document.addEventListener('keydown', this._boundKeydown);
-    this._subscribeToUpdates();
-  }
-
-  close() {
-    this._overlayEl.classList.remove('open');
-    document.removeEventListener('keydown', this._boundKeydown);
-    this._unsubscribeFromUpdates();
-    this._bodyEl.innerHTML = '';
-    this._coverEl = null;
-  }
-
-  async _subscribeToUpdates() {
-    this._unsubscribeFromUpdates();
-    const hass = this._getHass();
-    if (!hass || !hass.connection) return;
-    try {
-      this._unsub = await hass.connection.subscribeEvents(() => {
-        if (this._coverEl) this._coverEl.hass = this._getHass();
-      }, 'state_changed');
-    } catch (err) {
-      console.warn('chrono-cover: could not subscribe to entity updates - popup will not update live', err);
-    }
-  }
-
-  _unsubscribeFromUpdates() {
-    if (typeof this._unsub === 'function') {
-      this._unsub();
-    }
-    this._unsub = null;
-  }
+function ccGetHass() {
+  const ha = document.querySelector('home-assistant');
+  return ha ? ha.hass : undefined;
 }
 
-if (!customElements.get('chrono-cover-popup-host')) {
-  customElements.define('chrono-cover-popup-host', ChronoCoverPopupHost);
-}
-
-// Runs once per module load - guarded the same way the element definition
-// above already is, so a duplicate resource load never double-registers
-// the listener or appends a second host element.
-if (!window.__chronoCoverPopupHostInstalled) {
-  window.__chronoCoverPopupHostInstalled = true;
-
-  const host = document.createElement('chrono-cover-popup-host');
-  document.body.appendChild(host);
+// Runs once per module load - guarded so a duplicate resource load never
+// double-registers the listener.
+if (!window.__chronoCoverPopupListenerInstalled) {
+  window.__chronoCoverPopupListenerInstalled = true;
 
   document.addEventListener('ll-custom', (ev) => {
     const detail = ev.detail && ev.detail[EVENT_KEY];
     if (!detail) return;
-    host.open(detail.data || {});
+    const { title, close_align, title_align, ...rawConfig } = detail.data || {};
+    // The popup header already shows the title - ChronoCover's own inner
+    // .title becomes a duplicate in this context only. Only applied here,
+    // not as a global default, since a standalone/browser_mod placement
+    // still wants its own title. A caller's own explicit show_name in
+    // data: always wins.
+    const config = { show_name: false, ...rawConfig };
+    const el = document.createElement('chrono-cover');
+    let errorMessage = null;
+    try {
+      el.setConfig(config);
+    } catch (err) {
+      errorMessage = `chrono-cover: ${err.message}`;
+    }
+    if (!errorMessage) {
+      el.hass = ccGetHass();
+    }
+    el.openAsPopup(title, close_align, title_align, errorMessage);
   });
 }
-
