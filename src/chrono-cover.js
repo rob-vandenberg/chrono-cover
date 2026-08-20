@@ -43,9 +43,36 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.33';
+const CARD_VERSION = '1.3.34';
 
 // --- Version History ----------------------------------------------------
+// v1.3.34: .heading's left/right padding is no longer a single static
+//           value - the close-button occupies 48px including its own
+//           padding, so the side it's actually adjacent to needs less
+//           heading padding than the side facing the open frame edge, or
+//           the gap between icon and heading text is too wide (only
+//           matters when close_align and title_align put the button and
+//           the text on the same side - "hidden" is unaffected, both sides
+//           stay at the default). Fixed via a plain lookup table (button-
+//           adjacent side: 4px, the other side: 16px, both 16px when
+//           close_align is "hidden"), written directly as literal values
+//           into a small <style> block that's part of the popup overlay's
+//           own per-open markup (already rebuilt from scratch on every
+//           openAsPopup() call) - not a runtime calculation, not a CSS
+//           variable, not a toggled class, and specifically not an inline
+//           element.style (three earlier proposals along those lines were
+//           each raised and each rejected in review - the CSS-variable
+//           approach because it still couldn't beat a real styles: heading
+//           override cleanly without care, the classed-toggle approach
+//           because it added indirection for no reason once it was pointed
+//           out this file already fully controls its own generated
+//           stylesheet, and inline element.style specifically because it
+//           silently defeats any styles: heading: {...} override - the
+//           exact bug this fix would otherwise have reintroduced).
+//           .heading's old static padding: 0 16px in the shared _css()
+//           is removed entirely - now always supplied by the per-open
+//           block instead, so leaving a default there would just be dead,
+//           unreachable CSS.
 // v1.3.33: Real root cause of the close-button-too-far-inward issue found
 //           and fixed - .header's own padding: 0 8px was pushing BOTH
 //           children (heading and close-button) inward uniformly, but only
@@ -787,9 +814,30 @@ class ChronoCover extends HTMLElement {
     }
     const root = this.shadowRoot;
 
+    // Resolved before the overlay's own markup is built (not after), since
+    // .heading's left/right padding is written directly into that markup's
+    // own <style> block below - a straight table lookup (button-adjacent
+    // side gets 4px, the other side keeps the default 16px; both sides
+    // stay at 16px when there's no button at all), not a runtime
+    // calculation. This is our own stylesheet, generated fresh on every
+    // open - the correct value is decided once, at the point we write it,
+    // not patched onto a fixed default afterward via a class, a CSS
+    // variable, or (never) an inline element.style, which would silently
+    // defeat a person's own styles: heading: {...} override.
+    const resolvedCloseAlign = ccResolveAlignOption(closeAlign, CLOSE_ALIGN_VALUES, 'close_align');
+    const resolvedTitleAlign = ccResolveAlignOption(titleAlign, TITLE_ALIGN_VALUES, 'title_align');
+    const headingPadLeft = resolvedCloseAlign === 'left' ? 4 : 16;
+    const headingPadRight = resolvedCloseAlign === 'right' ? 4 : 16;
+
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.innerHTML = `
+      <style>
+        .heading {
+          padding-left: ${headingPadLeft}px;
+          padding-right: ${headingPadRight}px;
+        }
+      </style>
       <div class="frame">
         <div class="header">
           <button class="close-button" aria-label="Close">
@@ -819,8 +867,6 @@ class ChronoCover extends HTMLElement {
     headingEl.textContent = resolvedTitle || '';
 
     const closeButtonEl = overlay.querySelector('.close-button');
-    const resolvedCloseAlign = ccResolveAlignOption(closeAlign, CLOSE_ALIGN_VALUES, 'close_align');
-    const resolvedTitleAlign = ccResolveAlignOption(titleAlign, TITLE_ALIGN_VALUES, 'title_align');
     closeButtonEl.style.order = resolvedCloseAlign === 'right' ? '1' : '0';
     closeButtonEl.style.display = resolvedCloseAlign === 'hidden' ? 'none' : '';
     headingEl.style.textAlign = resolvedTitleAlign === 'hidden' ? '' : resolvedTitleAlign;
@@ -1614,7 +1660,6 @@ class ChronoCover extends HTMLElement {
       }
       .heading {
         flex: 1;
-        padding: 0 16px;
         font-size: 24px;
         line-height: 2rem;
         font-weight: 400;
