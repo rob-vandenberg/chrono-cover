@@ -43,9 +43,22 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.34';
+const CARD_VERSION = '1.3.35';
 
 // --- Version History ----------------------------------------------------
+// v1.3.35: .control-button-group gains margin-top: 5px, matching .slider's
+//           own existing margin-top: 5px. Root cause (verified via measured
+//           getBoundingClientRect() data): .main-control has no explicit
+//           height - it auto-sizes to wrap whichever of .slider /
+//           .control-button-group is actually visible (the other is
+//           display: none, contributing nothing). .slider's margin-top: 5px
+//           was already included in that auto-size calculation without
+//           moving .main-control's own top edge (anchored by .state-header
+//           above, unaffected by margin inside .main-control) - so in
+//           slider mode .main-control was 5px taller, entirely at the
+//           bottom, tops identical between modes, bottoms 5px apart.
+//           Giving .control-button-group the same margin-top makes
+//           .main-control's auto-height identical in both modes.
 // v1.3.34: .heading's left/right padding is no longer a single static
 //           value - the close-button occupies 48px including its own
 //           padding, so the side it's actually adjacent to needs less
@@ -1338,6 +1351,7 @@ class ChronoCover extends HTMLElement {
         width: 100%;
         min-width: var(--control-button-group-min-width, 54px);
         max-width: var(--control-button-group-max-width, 100px);
+        margin-top: 5px;
         display: none;
         flex-direction: column;
       }

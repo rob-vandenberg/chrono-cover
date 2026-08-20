@@ -195,7 +195,7 @@ tap_action:
           border-radius: 4px
 ```
 
-The class names match exactly what you'd find inspecting the popup with your browser's dev tools, written as either `snake_case` or the class's own hyphenated form. A handful of the most useful ones: `ha-card`, `title`, `state`, `percentage`, `last-changed`, `control-slider-host`, `slider-container`, `slider`, `handle`, `main-control`, `control-button-group`, `control-button`, `icon-button-group`, `icon-toggle-button`, `tooltip`, `favorites`, `favorite-button`.
+The class names match exactly what you'd find inspecting the popup with your browser's dev tools, written as either `snake_case` or the class's own hyphenated form. A handful of the most useful ones: `ha-card`, `title`, `state`, `percentage`, `last-changed`, `slider`, `handle`, `main-control`, `control-button-group`, `control-button`, `icon-button-group`, `icon-toggle-button`, `tooltip`, `favorites`, `favorite-button`. The popup window around all of this - the backdrop, the dialog box, the header - has its own classes too, styled the exact same way: `overlay`, `frame`, `header`, `heading`, `close-button`, `body`.
 
 One key is special: `host` targets Chrono Cover's own outer element (not a class) - use it to change things like its outer margin.
 
@@ -205,18 +205,17 @@ styles:
     margin: 0
 ```
 
-Another key is special in a different way: `popup`. It's a nested block, not a class name, and it only has any effect when you're using the built-in `fire-dom-event` trigger (not browser_mod) - it styles the popup window itself, which lives in its own separate shadow root from Chrono Cover's own content:
+You can nest classes inside each other to reach an element that sits inside another one, the same way you'd write a CSS selector like `.slider .handle`:
 
 ```yaml
 styles:
-  popup:
-    frame:
-      border: 2px solid '#ff9800'
-    title:
-      font-weight: 700
+  slider:
+    border: 1px solid var(--divider-color)
+    handle:
+      background: '#ff9800'
 ```
 
-The classes available under `popup:` are its own: `overlay` (the full-screen backdrop), `frame` (the dialog box itself), `header`, `title`, `close-button`, and `body`.
+This styles the slider itself, and separately styles the handle inside it. You don't have to nest - styling `handle` directly at the top level works exactly the same, since every element already has its own class. Nesting is just another way to write it, useful when it reads more clearly grouped together.
 
 Some elements exist as more than one instance on the popup - the three directional buttons, the two mode-toggle buttons, and the favorite-position buttons. Styling their shared class (e.g. `control-button`, `icon-toggle-button`, `favorite-button`) changes all of them at once. To style just one, use its own specific class instead: `control-button-close` / `control-button-stop` / `control-button-open` for the directional buttons, `icon-toggle-button-position` / `icon-toggle-button-button` for the mode-toggle buttons, and `favorite-button-<value>` (e.g. `favorite-button-30`) for an individual favorite position.
 
@@ -228,7 +227,7 @@ A regular property override only affects the one class you targeted. On top of t
 
 ```yaml
 styles:
-  control-slider-host:
+  slider:
     "--slider-border-radius": 6px
     "--slider-color": '#ff9800'
 ```
@@ -259,24 +258,24 @@ styles:
 | `--last-changed-padding-y` | `last-changed` | `4px` | Vertical padding above/below the relative-time label. |
 | `--controls-margin-top` | `controls` | `16px` | Gap above the controls area (slider/buttons). |
 | `--controls-margin-bottom` | `controls` | `8px` | Gap below the controls area, above whatever section comes next. |
-| `--controls-height` | `control-slider-host` or `control-button-group` | `45vh` | Height of the active control (slider or directional buttons). Shared between both, so they stay the same size regardless of which is showing. |
-| `--controls-max-height` | `control-slider-host` or `control-button-group` | `320px` | Maximum height of the active control. |
-| `--controls-min-height` | `control-slider-host` or `control-button-group` | `200px` | Minimum height of the active control. |
+| `--controls-height` | `slider` or `control-button-group` | `45vh` | Height of the active control (slider or directional buttons). Shared between both, so they stay the same size regardless of which is showing. |
+| `--controls-max-height` | `slider` or `control-button-group` | `320px` | Maximum height of the active control. |
+| `--controls-min-height` | `slider` or `control-button-group` | `200px` | Minimum height of the active control. |
 | `--control-button-group-min-width` | `control-button-group` | `54px` | Narrowest the directional-button column is allowed to shrink to. |
 | `--control-button-group-max-width` | `control-button-group` | `100px` | Widest the directional-button column is allowed to grow to. |
 | `--control-button-group-item-gap` | `control-button-group` | `10px` | Vertical spacing between the three directional buttons. |
 | `--main-control-item-margin` | `main-control` | `8px` | Horizontal spacing between the slider and the directional-button group. |
-| `--slider-color` | `control-slider-host` | The entity's current state color | The color of the filled part of the slider, and the focus outline shown when the slider is selected with a keyboard. |
-| `--slider-background` | `control-slider-host` | The entity's current state color, dimmed | The color of the empty (unfilled) part of the slider track. |
-| `--slider-background-opacity` | `control-slider-host` | `0.2` | How dim the empty part of the track is. `1` removes the dimming entirely, `0` makes it invisible. |
-| `--slider-min-width` | `control-slider-host` | `80px` | The narrowest the slider is allowed to shrink to. |
-| `--slider-max-width` | `control-slider-host` | `130px` | The widest the slider is allowed to grow to. Together with `--slider-min-width`, also sets how far the handle can travel from the top and bottom edges (see `--handle-margin`). |
-| `--slider-border-radius` | `control-slider-host` | `36px` | How rounded the slider's own outer corners are. |
-| `--slider-track-bar-border-radius` | `control-slider-host` | `8px` | How rounded the corners of the filled bar inside the slider are. Kept independent of `--slider-border-radius` so the fill doesn't distort into a flattened dome shape at low percentages. |
-| `--handle-size` | `slider-container` | `4px` | The thickness of the white handle bar. |
-| `--handle-color` | `slider-container` | `white` | The color of the handle bar. |
-| `--handle-margin` | `slider-container` | The larger of `--slider-min-width`/`--slider-max-width`, ÷ 8 | How far the handle sits from the top/bottom edge at each extreme. Set this directly to override the automatic width-based value. |
-| `--state-cover-inactive-color` | `control-slider-host` | The entity's own "open" reference color | Used behind the scenes for a closed device's muted color tone, matching Home Assistant's own theming convention. Most people won't need to touch this one. |
+| `--slider-color` | `slider` | The entity's current state color | The color of the filled part of the slider, and the focus outline shown when the slider is selected with a keyboard. |
+| `--slider-background` | `slider` | The entity's current state color, dimmed | The color of the empty (unfilled) part of the slider track. |
+| `--slider-background-opacity` | `slider` | `0.2` | How dim the empty part of the track is. `1` removes the dimming entirely, `0` makes it invisible. |
+| `--slider-min-width` | `slider` | `80px` | The narrowest the slider is allowed to shrink to. |
+| `--slider-max-width` | `slider` | `130px` | The widest the slider is allowed to grow to. Together with `--slider-min-width`, also sets how far the handle can travel from the top and bottom edges (see `--handle-margin`). |
+| `--slider-border-radius` | `slider` | `36px` | How rounded the slider's own outer corners are. |
+| `--slider-track-bar-border-radius` | `slider` | `8px` | How rounded the corners of the filled bar inside the slider are. Kept independent of `--slider-border-radius` so the fill doesn't distort into a flattened dome shape at low percentages. |
+| `--handle-size` | `slider` | `4px` | The thickness of the white handle bar. |
+| `--handle-color` | `handle` | `white` | The color of the handle bar. |
+| `--handle-margin` | `slider` | The larger of `--slider-min-width`/`--slider-max-width`, ÷ 8 | How far the handle sits from the top/bottom edge at each extreme. Set this directly to override the automatic width-based value. |
+| `--state-cover-inactive-color` | `slider` | The entity's own "open" reference color | Used behind the scenes for a closed device's muted color tone, matching Home Assistant's own theming convention. Most people won't need to touch this one. |
 | `--control-button-border-radius` | `control-button` | `36px` | Corner rounding of each directional (open/stop/close) button. |
 | `--control-button-padding` | `control-button` | `8px` | Padding inside each directional button, around its icon. |
 | `--overlay-opacity` | `control-button` or `favorite-button` | `0.2` | Opacity of the dim shade shown on disabled directional buttons and inactive favorite buttons. Shared across both. |
@@ -286,7 +285,7 @@ styles:
 | `--icon-button-group-border-radius` | `icon-button-group` | `9999px` | Corner rounding of the slider/buttons toggle pill. |
 | `--icon-button-group-background` | `icon-button-group` | `rgba(139, 145, 151, 0.1)` | Background fill color of the toggle pill. |
 | `--icon-button-group-min-width` | `icon-button-group` | `54px` | Narrowest the slider/buttons toggle pill is allowed to shrink to. |
-| `--icon-button-group-max-width` | `icon-button-group` | `100px` | Widest the slider/buttons toggle pill is allowed to grow to. |
+| `--icon-button-group-max-width` | `icon-button-group` | `96px` | Widest the slider/buttons toggle pill is allowed to grow to. |
 | `--icon-button-group-height` | `icon-button-group` | `48px` | Height of the toggle pill. |
 | `--icon-toggle-button-size` | `icon-toggle-button` | `40px` | Size of each mode-toggle icon button, and its selection highlight. |
 | `--icon-toggle-button-gap` | `icon-toggle-button` | `4px` | Spacing around each mode-toggle icon button. |
@@ -313,17 +312,17 @@ styles:
 | `--tooltip-offset` | `tooltip` | `-4px` | Horizontal offset of the drag tooltip from the slider's edge. |
 | `--clear-background-color` | `tooltip` | `#212121` | Background color of the drag tooltip. |
 
-**Popup window variables** (set as a normal top-level `styles:` entry, not under `popup:` - these size and color the dialog frame itself):
+**Popup window variables** (these size and color the dialog frame itself, around the content above):
 
-| Variable | Default | What it changes |
-| :--- | :--- | :--- |
-| `--chrono-cover-popup-z-index` | `10000` | Stacking order of the popup above the rest of the page. |
-| `--chrono-cover-popup-backdrop` | `rgba(0, 0, 0, 0.5)` | Color of the dimmed background behind the popup. |
-| `--chrono-cover-popup-max-width` | `580px` | Maximum width of the popup dialog. |
-| `--chrono-cover-popup-margin-top` | `10vh` | Space above the popup dialog. |
-| `--chrono-cover-popup-background` | Your theme's card background color | Background color of the popup dialog itself. |
-| `--chrono-cover-popup-border-radius` | `24px` | Corner rounding of the popup dialog. |
-| `--chrono-cover-popup-box-shadow` | `0 8px 32px rgba(0, 0, 0, 0.5)` | Drop shadow around the popup dialog. |
+| Variable | Set it under | Default | What it changes |
+| :--- | :--- | :--- | :--- |
+| `--chrono-cover-popup-z-index` | `overlay` | `10000` | Stacking order of the popup above the rest of the page. |
+| `--chrono-cover-popup-backdrop` | `overlay` | `rgba(0, 0, 0, 0.5)` | Color of the dimmed background behind the popup. |
+| `--chrono-cover-popup-max-width` | `frame` | `580px` | Maximum width of the popup dialog. |
+| `--chrono-cover-popup-margin-top` | `frame` | `10vh` | Space above the popup dialog. |
+| `--chrono-cover-popup-background` | `frame` | Your theme's card background color | Background color of the popup dialog itself. |
+| `--chrono-cover-popup-border-radius` | `frame` | `24px` | Corner rounding of the popup dialog. |
+| `--chrono-cover-popup-box-shadow` | `frame` | `0 8px 32px rgba(0, 0, 0, 0.5)` | Drop shadow around the popup dialog. |
 
 ---
 
