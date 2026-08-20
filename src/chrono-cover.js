@@ -43,9 +43,29 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.1.12';
+const CARD_VERSION = '1.2.20';
 
 // --- Version History ----------------------------------------------------
+// v1.2.20: Slider restructured so .slider is the single outer, authoritative
+//           box - styles: slider: { width: ... } (or min-width/max-width/
+//           height) now works directly, matching what anyone would guess
+//           first. .control-slider-host and .slider-container are both
+//           gone - .slider itself now carries their combined width/height/
+//           visibility-toggle/--handle-* responsibilities. This required
+//           moving .slider's own overflow:hidden (needed to clip the
+//           rounded track corners) down onto a new inner .slider-track
+//           wrapper, since .slider itself needed to become unclipped -
+//           .tooltip escapes visually to its left, and .slider-track-bar's
+//           own vertical translate deliberately overhangs .slider's own
+//           top edge at partial values, both of which .slider's old
+//           overflow:hidden was doing double duty clipping/hosting. Nobody
+//           targets .slider-track directly via styles: - it exists purely
+//           to keep the rounded-corner clip working, one level below the
+//           box people actually reach for. DOM, CSS, and every JS element
+//           reference (_sliderHostEl/_sliderContainerEl merged into the
+//           existing _sliderEl) updated together - no functional/visual
+//           behavior change intended, purely a structural simplification.
+//           Not yet visually confirmed by the user - flag until then.
 // v1.1.12: Popup header title now falls back to the entity's own
 //           friendly_name (then the entity id itself, as a last resort)
 //           when no explicit title is given in data:. Mirrors the
@@ -233,10 +253,10 @@ const UNAVAILABLE = 'unavailable';
 const RELATIVE_TIME_REFRESH_INTERVAL_MS = 30000;
 const OPEN_CLOSE_THRESHOLD = 10;
 
-// Must match .slider-container's --handle-size in the CSS below.
+// Must match .slider's own --handle-size in the CSS below.
 const HANDLE_SIZE_PX = 4;
 // Divisor used to derive the slider's handle margin from its width - must
-// match the divisor in .slider-container's --handle-margin CSS formula.
+// match the divisor in .slider's own --handle-margin CSS formula.
 const HANDLE_MARGIN_DIVISOR = 8;
 
 // Device-type preset table, keyed by the entity's device_class attribute
@@ -728,16 +748,14 @@ class ChronoCover extends HTMLElement {
         </div>
         <div class="controls">
           <div class="main-control">
-            <div class="control-slider-host">
-              <div class="slider-container">
-                <div id="slider" class="slider" role="slider" tabindex="0" aria-orientation="vertical">
-                  <div class="slider-track-background"></div>
-                  <div class="slider-track-bar">
-                    <div class="handle"></div>
-                  </div>
+            <div id="slider" class="slider" role="slider" tabindex="0" aria-orientation="vertical">
+              <div class="slider-track">
+                <div class="slider-track-background"></div>
+                <div class="slider-track-bar">
+                  <div class="handle"></div>
                 </div>
-                <span class="tooltip"></span>
               </div>
+              <span class="tooltip"></span>
             </div>
             <div class="control-button-group">
               <button class="control-button control-button-open" aria-label="Open">
@@ -775,8 +793,6 @@ class ChronoCover extends HTMLElement {
     this._percentageEl = root.querySelector('.percentage');
     this._lastChangedEl = root.querySelector('.last-changed');
     this._controlsEl = root.querySelector('.controls');
-    this._sliderHostEl = root.querySelector('.control-slider-host');
-    this._sliderContainerEl = root.querySelector('.slider-container');
     this._sliderEl = root.querySelector('#slider');
     this._tooltipEl = root.querySelector('.tooltip');
     this._buttonGroupEl = root.querySelector('.control-button-group');
@@ -802,7 +818,7 @@ class ChronoCover extends HTMLElement {
 
     this._boundPointerMove = (e) => this._onPointerMove(e);
     this._boundPointerUp = () => this._onPointerUp();
-    this._sliderContainerEl.addEventListener('pointerdown', (e) => this._onSliderPointerDown(e));
+    this._sliderEl.addEventListener('pointerdown', (e) => this._onSliderPointerDown(e));
     this._openBtnEl.addEventListener('click', () => this._callDirectional('open'));
     this._stopBtnEl.addEventListener('click', () => this._stopCover());
     this._closeBtnEl.addEventListener('click', () => this._callDirectional('close'));
@@ -835,7 +851,7 @@ class ChronoCover extends HTMLElement {
 
   _paint(sliderValue) {
     const fraction = sliderValue / 100;
-    this._sliderContainerEl.style.setProperty('--value', fraction.toString());
+    this._sliderEl.style.setProperty('--value', fraction.toString());
     const rawPosition = this._sliderFraction(sliderValue);
     this._tooltipEl.textContent = `${this._displayPercentage(rawPosition)}%`;
   }
@@ -843,9 +859,9 @@ class ChronoCover extends HTMLElement {
   _onSliderPointerDown(e) {
     e.preventDefault();
     this._dragging = true;
-    this._sliderContainerEl.classList.add('pressed');
+    this._sliderEl.classList.add('pressed');
     this._tooltipEl.classList.add('visible');
-    const computedStyle = getComputedStyle(this._sliderContainerEl);
+    const computedStyle = getComputedStyle(this._sliderEl);
     const minWidthPx = parseFloat(computedStyle.getPropertyValue('--slider-min-width'));
     const maxWidthPx = parseFloat(computedStyle.getPropertyValue('--slider-max-width'));
     this._dragHandleMarginPx = Math.max(minWidthPx, maxWidthPx) / HANDLE_MARGIN_DIVISOR;
@@ -865,7 +881,7 @@ class ChronoCover extends HTMLElement {
   _onPointerUp() {
     if (!this._dragging) return;
     this._dragging = false;
-    this._sliderContainerEl.classList.remove('pressed');
+    this._sliderEl.classList.remove('pressed');
     this._tooltipEl.classList.remove('visible');
     this._teardownDragListeners();
     const value = this._dragValue;
@@ -953,7 +969,7 @@ class ChronoCover extends HTMLElement {
     const openColor = ccStateColorCssCover(entity.state, deviceClass, 'open');
     const color = ccStateColorCssCover(effectiveState, deviceClass);
     this._stateStyleSheet.replaceSync(
-      `.control-slider-host { --state-cover-inactive-color: ${openColor}; --slider-color: ${color}; --slider-background: ${color}; }`
+      `.slider { --state-cover-inactive-color: ${openColor}; --slider-color: ${color}; --slider-background: ${color}; }`
     );
 
     const openDisabled = !ccCanOpenCover(entity, true);
@@ -966,7 +982,7 @@ class ChronoCover extends HTMLElement {
     this._openIconPathEl.setAttribute('d', ccComputeOpenIcon(entity));
     this._closeIconPathEl.setAttribute('d', ccComputeCloseIcon(entity));
 
-    this._sliderHostEl.classList.toggle('active', this._toggleMode === 'position');
+    this._sliderEl.classList.toggle('active', this._toggleMode === 'position');
     this._buttonGroupEl.classList.toggle('active', this._toggleMode === 'button');
     this._togglePositionBtnEl.classList.toggle('selected', this._toggleMode === 'position');
     this._toggleButtonBtnEl.classList.toggle('selected', this._toggleMode === 'button');
@@ -1126,14 +1142,17 @@ class ChronoCover extends HTMLElement {
       }
 
       /* ---- Slider ---- */
-      .control-slider-host {
+      .slider {
         display: none;
+        position: relative;
         --slider-color: var(--primary-color);
         --slider-background: var(--disabled-color);
         --slider-background-opacity: 0.2;
         --slider-max-width: 130px;
         --slider-min-width: 80px;
         --slider-border-radius: 36px;
+        --handle-size: 4px;
+        --handle-margin: calc(max(var(--slider-min-width), var(--slider-max-width)) / 8);
         height: var(--controls-height, 45vh);
         max-height: var(--controls-max-height, 320px);
         min-height: var(--controls-min-height, 200px);
@@ -1141,31 +1160,24 @@ class ChronoCover extends HTMLElement {
         min-width: var(--slider-min-width);
         max-width: var(--slider-max-width);
         margin-top: 5px;
-      }
-      .control-slider-host.active {
-        display: block;
-      }
-      .slider-container {
-        position: relative;
-        height: 100%;
-        width: 100%;
-        --handle-size: 4px;
-        --handle-margin: calc(max(var(--slider-min-width), var(--slider-max-width)) / 8);
-      }
-      .slider {
-        position: relative;
-        height: 100%;
-        width: 100%;
         border-radius: var(--slider-border-radius);
         transform: translateZ(0);
         transition: box-shadow var(--transition-duration, 180ms) ease-in-out;
         outline: none;
-        overflow: hidden;
         cursor: pointer;
         touch-action: none;
       }
+      .slider.active {
+        display: block;
+      }
       .slider:focus-visible {
         box-shadow: 0 0 0 var(--focus-ring-width, 2px) var(--slider-color);
+      }
+      .slider-track {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        border-radius: var(--slider-border-radius);
       }
       .slider-track-background {
         position: absolute;
