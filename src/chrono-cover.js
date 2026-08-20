@@ -43,9 +43,16 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.30';
+const CARD_VERSION = '1.3.31';
 
 // --- Version History ----------------------------------------------------
+// v1.3.31: .heading gains its own padding: 0 16px - on top of, not instead
+//           of, the existing padding: 0 8px already on its parent .header,
+//           so the heading text now sits 24px from the frame edge (8 + 16)
+//           regardless of which side it's aligned to. Previously the
+//           heading only had .header's 8px, sitting visibly closer to the
+//           edge than the close-button's own effective ~20px (its 48px hit
+//           target has 12px internal padding around a 24px icon).
 // v1.3.30: Popup shadow-root collapse. <chrono-cover-popup-host> is gone -
 //           <chrono-cover> now builds its own popup chrome (overlay/frame/
 //           header/heading/close-button/body) directly inside its own
@@ -1589,6 +1596,7 @@ class ChronoCover extends HTMLElement {
       }
       .heading {
         flex: 1;
+        padding: 0 16px;
         font-size: 24px;
         line-height: 2rem;
         font-weight: 400;
