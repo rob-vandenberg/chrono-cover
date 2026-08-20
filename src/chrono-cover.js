@@ -43,9 +43,24 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.32';
+const CARD_VERSION = '1.3.33';
 
 // --- Version History ----------------------------------------------------
+// v1.3.33: Real root cause of the close-button-too-far-inward issue found
+//           and fixed - .header's own padding: 0 8px was pushing BOTH
+//           children (heading and close-button) inward uniformly, but only
+//           the heading actually needed that spacing; the close-button is
+//           already a defined 48px box that should sit flush against
+//           whichever edge it's aligned to. .header's padding removed
+//           entirely; .heading gains its own padding: 0 16px (up from 8px)
+//           to preserve the same 16px total edge-distance it already had,
+//           now sourced entirely from .heading itself instead of split
+//           across .header + .heading. Two earlier proposals for the
+//           close-button symptom (a negative margin, then shrinking its
+//           box and compensating with a pseudo-element hit area) were both
+//           rejected as fixing the consequence instead of the cause, per
+//           Rule 6 - correctly, in hindsight: the shared .header padding
+//           was the actual bug.
 // v1.3.32: .heading's own padding reduced from 0 16px to 0 8px (16px was
 //           too much, per direct visual feedback) - total distance from
 //           the frame edge is now 8 (from .header) + 8 (from .heading) =
@@ -1596,11 +1611,10 @@ class ChronoCover extends HTMLElement {
       .header {
         display: flex;
         align-items: center;
-        padding: 0 8px;
       }
       .heading {
         flex: 1;
-        padding: 0 8px;
+        padding: 0 16px;
         font-size: 24px;
         line-height: 2rem;
         font-weight: 400;
