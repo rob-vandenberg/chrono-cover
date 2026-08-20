@@ -43,9 +43,19 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.1.10';
+const CARD_VERSION = '1.1.11';
 
 // --- Version History ----------------------------------------------------
+// v1.1.11: Changed two defaults. DEFAULT_SHOW_LAST_CHANGED: true -> false
+//           (the relative-time label is now hidden by default). ha-card's
+//           own default styling now includes border: none (flat property,
+//           no new CSS variable - matches the change as requested, not
+//           var-ified like most other properties in _css(), since that
+//           wasn't asked for). Both remain fully overridable via
+//           show_last_changed: true / styles: ha_card: { border: ... }
+//           respectively, same mechanism as every other default.
+//           show_percentage was already true by default (DEFAULT_SHOW_
+//           PERCENTAGE, unchanged since v1.0.0) - no change needed there.
 // v1.1.10: Fixed DEVICE_TYPE_DEFAULTS auto-detection for shade entities.
 //           The tuned open_state/percentage/slider values ported from
 //           chrono-slider-card's "Screen" device_type had been filed under
@@ -302,7 +312,7 @@ const DEVICE_TYPE_DEFAULTS = {
 // Standalone config defaults, independent of device_type/device_class.
 const DEFAULT_SHOW_NAME = true;
 const DEFAULT_SHOW_STATE = true;
-const DEFAULT_SHOW_LAST_CHANGED = true;
+const DEFAULT_SHOW_LAST_CHANGED = false;
 const DEFAULT_SHOW_PERCENTAGE = true;
 const DEFAULT_SHOW_CONTROL_SWITCH_BUTTONS = true;
 const DEFAULT_SHOW_CONTROLS = true;
@@ -974,6 +984,7 @@ class ChronoCover extends HTMLElement {
         display: flex;
         flex-direction: column;
         align-items: center;
+        border: none;
       }
 
       /* ---- Title ---- */
