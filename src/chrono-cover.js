@@ -43,9 +43,13 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.31';
+const CARD_VERSION = '1.3.32';
 
 // --- Version History ----------------------------------------------------
+// v1.3.32: .heading's own padding reduced from 0 16px to 0 8px (16px was
+//           too much, per direct visual feedback) - total distance from
+//           the frame edge is now 8 (from .header) + 8 (from .heading) =
+//           16px, down from 24px in v1.3.31.
 // v1.3.31: .heading gains its own padding: 0 16px - on top of, not instead
 //           of, the existing padding: 0 8px already on its parent .header,
 //           so the heading text now sits 24px from the frame edge (8 + 16)
@@ -1596,7 +1600,7 @@ class ChronoCover extends HTMLElement {
       }
       .heading {
         flex: 1;
-        padding: 0 16px;
+        padding: 0 8px;
         font-size: 24px;
         line-height: 2rem;
         font-weight: 400;
