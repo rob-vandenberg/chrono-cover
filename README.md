@@ -161,6 +161,8 @@ tap_action:
 | `default_control` | `slider`/`buttons` | `slider` | Which control is shown by default. Once someone switches manually, their choice is remembered per entity, per browser, and used instead on future opens. |
 | `styles` | object | (none) | Advanced: restyle individual elements directly from YAML. See [Custom Styling](#-custom-styling) below. |
 
+Every key in the table below works equally well written with underscores or hyphens - `show_last_changed` and `show-last-changed` do exactly the same thing. Use whichever you're more used to typing.
+
 Using a key that isn't in this list, or a value that isn't valid, won't break anything - it's just ignored.
 
 **Advanced:** if the auto-detected (or overridden) device type doesn't quite match your specific device, you can override the three things it controls individually, directly in YAML: `device_open_state`, `device_open_percentage`, and `device_open_slider` (each `true`/`false`). These are an escape hatch for the rare device that doesn't fit its device class' current default exactly. Most people will never need them.
@@ -172,6 +174,8 @@ Using a key that isn't in this list, or a value that isn't valid, won't break an
 | `title` | text | Entity's own name | The text shown in the popup header, above the controls. Leave it out and Chrono Cover uses the entity's own name (`friendly_name`, or failing that the entity id) instead. |
 | `close_align` | `left`/`right`/`hidden` | `left` | Which side of the popup header the close button sits on. `hidden` removes it entirely - you can still dismiss the popup by tapping outside it or pressing Escape. |
 | `title_align` | `left`/`right`/`center`/`hidden` | `left` | How the popup title is aligned. `hidden` removes the title text entirely. The title always uses the full width the close button doesn't occupy, whichever side that button is on. |
+
+`close_align`/`close-align` and `title_align`/`title-align` both work the same way too.
 
 ### 🎨 Custom Styling
 

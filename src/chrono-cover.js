@@ -43,9 +43,23 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.35';
+const CARD_VERSION = '1.3.36';
 
 // --- Version History ----------------------------------------------------
+// v1.3.36: Every top-level config option key now accepts kebab-case as
+//           well as snake_case (e.g. close-align works identically to
+//           close_align), transparently and without the person having to
+//           choose one convention consistently. New ccNormalizeConfigKeys()
+//           runs once at each config entry point (setConfig()'s first
+//           line, and on the ll-custom event's detail.data before its
+//           title/close_align/title_align destructure), converting every
+//           top-level key to snake_case via a new ccToSnake() - the mirror
+//           image of the existing ccToKebab(), which continues to serve
+//           only its original purpose (styles: values, converting toward
+//           kebab for real CSS output). styles: itself is a value here,
+//           not iterated into - its own nested class/property names are
+//           unaffected, still going through ccBuildUserStylesRules/
+//           ccToKebab exactly as before.
 // v1.3.35: .control-button-group gains margin-top: 5px, matching .slider's
 //           own existing margin-top: 5px. Root cause (verified via measured
 //           getBoundingClientRect() data): .main-control has no explicit
@@ -662,6 +676,35 @@ function ccToKebab(str) {
   return String(str).replace(/_/g, '-');
 }
 
+// Converts a kebab-case string to snake_case - the mirror image of
+// ccToKebab. Used to normalize incoming config option *keys* (as opposed
+// to styles: values, which go the other direction) so a person who types
+// close-align gets treated identically to close_align.
+function ccToSnake(str) {
+  return String(str).replace(/-/g, '_');
+}
+
+// Normalizes every top-level key of a raw config object to snake_case, so
+// every config option accepts either notation transparently - the user
+// picks whichever they like, and the read side (which always uses
+// config.snake_case_name) never has to care. Only the top level is
+// touched; styles: is a value here, not iterated into, so its own nested
+// class/property names go through their own separate conversion
+// (ccBuildUserStylesRules/ccToKebab) unaffected by this pass. If a key
+// exists in both forms in the same block, the literal snake_case key
+// already present always wins - the kebab form only fills in a key that
+// isn't already there under its snake_case name.
+function ccNormalizeConfigKeys(rawConfig) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(rawConfig)) {
+    const snakeKey = ccToSnake(key);
+    if (snakeKey === key || !(snakeKey in rawConfig)) {
+      normalized[snakeKey] = value;
+    }
+  }
+  return normalized;
+}
+
 // Converts a styles: block - nestable to any depth - into ready-to-adopt
 // CSS text. Each key at each level is classified by its value: a plain
 // object (not an array) is a nested classname, appended as a new descendant-
@@ -718,6 +761,7 @@ class ChronoCover extends HTMLElement {
   }
 
   setConfig(config) {
+    config = ccNormalizeConfigKeys(config || {});
     if (!config.entity) {
       throw new Error('You need to define an entity');
     }
@@ -1752,7 +1796,8 @@ if (!window.__chronoCoverPopupListenerInstalled) {
   document.addEventListener('ll-custom', (ev) => {
     const detail = ev.detail && ev.detail[EVENT_KEY];
     if (!detail) return;
-    const { title, close_align, title_align, ...rawConfig } = detail.data || {};
+    const rawData = ccNormalizeConfigKeys(detail.data || {});
+    const { title, close_align, title_align, ...rawConfig } = rawData;
     // The popup header already shows the title - ChronoCover's own inner
     // .title becomes a duplicate in this context only. Only applied here,
     // not as a global default, since a standalone/browser_mod placement
