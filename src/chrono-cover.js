@@ -43,9 +43,27 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.36';
+const CARD_VERSION = '1.3.37';
 
 // --- Version History ----------------------------------------------------
+// v1.3.37: BREAKING CHANGE. Slider structure flattened to match
+//           chrono-slider-card's own leaner shape, discovered during a
+//           cross-project comparison - chrono-cover was carrying an extra
+//           wrapper layer chrono-slider-card never needed. .slider-track
+//           (the clip-only wrapper div, .slider-track { overflow: hidden;
+//           border-radius: inherit; }) is removed entirely; overflow:
+//           hidden moves directly onto .slider itself, which already
+//           carried border-radius: var(--slider-border-radius) and is now
+//           the sole clip boundary. .slider-track-background renamed to
+//           .slider-track (that name is free now that the wrapper which
+//           used to own it is gone). .slider-track-bar renamed to
+//           .slider-bar; --slider-track-bar-border-radius renamed to
+//           --slider-bar-border-radius (default unchanged, 8px). Anyone
+//           targeting the old .slider-track, .slider-track-background,
+//           .slider-track-bar, or --slider-track-bar-border-radius via
+//           styles: needs to update to the new names. README not yet
+//           updated - deferred until the rest of this cross-project
+//           alignment work is done.
 // v1.3.36: Every top-level config option key now accepts kebab-case as
 //           well as snake_case (e.g. close-align works identically to
 //           close_align), transparently and without the person having to
@@ -1054,11 +1072,9 @@ class ChronoCover extends HTMLElement {
         <div class="controls">
           <div class="main-control">
             <div id="slider" class="slider" role="slider" tabindex="0" aria-orientation="vertical">
-              <div class="slider-track">
-                <div class="slider-track-background"></div>
-                <div class="slider-track-bar">
-                  <div class="handle"></div>
-                </div>
+              <div class="slider-track"></div>
+              <div class="slider-bar">
+                <div class="handle"></div>
               </div>
               <span class="tooltip"></span>
             </div>
@@ -1467,6 +1483,7 @@ class ChronoCover extends HTMLElement {
         max-width: var(--slider-max-width);
         margin-top: 5px;
         border-radius: var(--slider-border-radius);
+        overflow: hidden;
         transform: translateZ(0);
         transition: box-shadow var(--transition-duration, 180ms) ease-in-out;
         outline: none;
@@ -1481,12 +1498,6 @@ class ChronoCover extends HTMLElement {
       }
       .slider-track {
         position: absolute;
-        inset: 0;
-        overflow: hidden;
-        border-radius: inherit;
-      }
-      .slider-track-background {
-        position: absolute;
         top: 0;
         left: 0;
         height: 100%;
@@ -1494,7 +1505,7 @@ class ChronoCover extends HTMLElement {
         background: var(--slider-background);
         opacity: var(--slider-background-opacity);
       }
-      .slider-track-bar {
+      .slider-bar {
         --slider-size: calc(100% - 2 * var(--handle-margin) - var(--handle-size));
         position: absolute;
         height: 100%;
@@ -1503,7 +1514,7 @@ class ChronoCover extends HTMLElement {
         transition: transform var(--transition-duration, 180ms) ease-in-out, background-color var(--transition-duration, 180ms) ease-in-out;
         top: 0;
         left: 0;
-        border-radius: var(--slider-track-bar-border-radius, 8px);
+        border-radius: var(--slider-bar-border-radius, 8px);
         transform: translate3d(0, calc((var(--value, 0) - 1) * var(--slider-size)), 0);
       }
       .handle {
@@ -1518,7 +1529,7 @@ class ChronoCover extends HTMLElement {
         width: 50%;
         height: var(--handle-size);
       }
-      .pressed .slider-track-bar {
+      .pressed .slider-bar {
         transition: none;
       }
       .tooltip {
