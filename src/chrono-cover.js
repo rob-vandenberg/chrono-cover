@@ -43,9 +43,48 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.37';
+const CARD_VERSION = '1.3.39';
 
 // --- Version History ----------------------------------------------------
+// v1.3.39: Further sync from chrono-slider-card - renames only, no
+//           behavior change. CSS variables: --controls-gap ->
+//           --control-switch-buttons-margin-top; --icon-toggle-button-size
+//           -> --control-switch-button-size; --icon-toggle-button-gap ->
+//           --control-switch-button-gap; --icon-toggle-border-radius ->
+//           --control-switch-button-border-radius;
+//           --icon-toggle-hover-opacity -> --control-switch-button-hover-
+//           opacity; --icon-toggle-shade-expand -> --control-switch-button-
+//           shade-expand. Classnames: .icon-toggle-button ->
+//           .control-switch-button; .icon-toggle-shade ->
+//           .control-switch-button-shade; icon-toggle-button-position ->
+//           control-switch-slider-mode; icon-toggle-button-button ->
+//           control-switch-buttons-mode. Internal _toggleMode state values
+//           'position'/'button' renamed to 'slider'/'buttons', now matching
+//           the vocabulary already used by localStorage and default_control
+//           - the translation step itself (button-mode boolean into these
+//           strings) is unchanged, only the string literals. aria-labels
+//           "Position mode"/"Button mode" -> "Slider mode"/"Buttons mode".
+//           _togglePositionBtnEl/_toggleButtonBtnEl internal JS variable
+//           names intentionally left as-is - not part of this rename list,
+//           flagged separately for later.
+// v1.3.38: Synced from chrono-slider-card (v2.2.209-211). Classname
+//           .icon-button-group renamed to .control-switch-buttons (DOM,
+//           CSS, and the _iconGroupEl JS reference). CSS variables
+//           --icon-button-group-height/-border-radius/-background/
+//           -min-width/-max-width renamed to --control-switch-buttons-*
+//           (defaults unchanged). .favorites' single --favorite-button-gap
+//           (flex gap shorthand) replaced by separate row-gap/column-gap
+//           declarations driven by new --favorites-row-gap/
+//           --favorites-column-gap variables (both default 16px, matching
+//           chrono-slider-card). --favorites-gap (the unrelated margin-top
+//           spacing above the favorites row) renamed to
+//           --favorites-margin-top, default unchanged (16px). setConfig()'s
+//           toggle-mode resolution now depends on
+//           show_control_switch_buttons: when true, unchanged (localStorage
+//           value used if present, else default_control); when false, the
+//           localStorage read is skipped entirely and default_control
+//           (already defaulting to "slider" when unset) is the sole
+//           source - no stale stored value can override it.
 // v1.3.37: BREAKING CHANGE. Slider structure flattened to match
 //           chrono-slider-card's own leaner shape, discovered during a
 //           cross-project comparison - chrono-cover was carrying an extra
@@ -834,14 +873,16 @@ class ChronoCover extends HTMLElement {
     this._dragValue = null;
 
     let storedControl = null;
-    try {
-      storedControl = window.localStorage.getItem(ccToggleModeStorageKey(config.entity));
-    } catch (e) {
-      storedControl = null;
+    if (this._showControlSwitchButtons) {
+      try {
+        storedControl = window.localStorage.getItem(ccToggleModeStorageKey(config.entity));
+      } catch (e) {
+        storedControl = null;
+      }
     }
     const effectiveControl =
       storedControl === 'buttons' || storedControl === 'slider' ? storedControl : this._defaultControl;
-    this._toggleMode = effectiveControl === 'buttons' ? 'button' : 'position';
+    this._toggleMode = effectiveControl === 'buttons' ? 'buttons' : 'slider';
 
     if (!this.shadowRoot) {
       this._buildDom();
@@ -1093,13 +1134,13 @@ class ChronoCover extends HTMLElement {
               </button>
             </div>
           </div>
-          <div class="icon-button-group">
-            <button class="icon-toggle-button icon-toggle-button-position" aria-label="Position mode">
-              <div class="icon-toggle-shade"></div>
+          <div class="control-switch-buttons">
+            <button class="control-switch-button control-switch-slider-mode" aria-label="Slider mode">
+              <div class="control-switch-button-shade"></div>
               <svg class="position-mode-icon" viewBox="0 0 24 24"><path class="position-mode-icon-path" d="${ICON_MENU}"></path></svg>
             </button>
-            <button class="icon-toggle-button icon-toggle-button-button" aria-label="Button mode">
-              <div class="icon-toggle-shade"></div>
+            <button class="control-switch-button control-switch-buttons-mode" aria-label="Buttons mode">
+              <div class="control-switch-button-shade"></div>
               <svg class="button-mode-icon" viewBox="0 0 24 24"><path class="button-mode-icon-path" d="${ICON_SWAP_VERTICAL}"></path></svg>
             </button>
           </div>
@@ -1122,9 +1163,9 @@ class ChronoCover extends HTMLElement {
     this._closeBtnEl = root.querySelector('.control-button-close');
     this._openIconPathEl = root.querySelector('.open-icon-path');
     this._closeIconPathEl = root.querySelector('.close-icon-path');
-    this._iconGroupEl = root.querySelector('.icon-button-group');
-    this._togglePositionBtnEl = root.querySelector('.icon-toggle-button-position');
-    this._toggleButtonBtnEl = root.querySelector('.icon-toggle-button-button');
+    this._iconGroupEl = root.querySelector('.control-switch-buttons');
+    this._togglePositionBtnEl = root.querySelector('.control-switch-slider-mode');
+    this._toggleButtonBtnEl = root.querySelector('.control-switch-buttons-mode');
     this._favoritesEl = root.querySelector('.favorites');
 
     // Static, config-driven visibility - fixed for this instance's lifetime
@@ -1143,8 +1184,8 @@ class ChronoCover extends HTMLElement {
     this._openBtnEl.addEventListener('click', () => this._callDirectional('open'));
     this._stopBtnEl.addEventListener('click', () => this._stopCover());
     this._closeBtnEl.addEventListener('click', () => this._callDirectional('close'));
-    this._togglePositionBtnEl.addEventListener('click', () => this._setToggleMode('position'));
-    this._toggleButtonBtnEl.addEventListener('click', () => this._setToggleMode('button'));
+    this._togglePositionBtnEl.addEventListener('click', () => this._setToggleMode('slider'));
+    this._toggleButtonBtnEl.addEventListener('click', () => this._setToggleMode('buttons'));
   }
 
   _buildFavoriteButtons() {
@@ -1249,7 +1290,7 @@ class ChronoCover extends HTMLElement {
     try {
       window.localStorage.setItem(
         ccToggleModeStorageKey(this._config.entity),
-        mode === 'button' ? 'buttons' : 'slider'
+        mode === 'buttons' ? 'buttons' : 'slider'
       );
     } catch (e) {
       // localStorage unavailable - toggle still works for this session.
@@ -1303,10 +1344,10 @@ class ChronoCover extends HTMLElement {
     this._openIconPathEl.setAttribute('d', ccComputeOpenIcon(entity));
     this._closeIconPathEl.setAttribute('d', ccComputeCloseIcon(entity));
 
-    this._sliderEl.classList.toggle('active', this._toggleMode === 'position');
-    this._buttonGroupEl.classList.toggle('active', this._toggleMode === 'button');
-    this._togglePositionBtnEl.classList.toggle('selected', this._toggleMode === 'position');
-    this._toggleButtonBtnEl.classList.toggle('selected', this._toggleMode === 'button');
+    this._sliderEl.classList.toggle('active', this._toggleMode === 'slider');
+    this._buttonGroupEl.classList.toggle('active', this._toggleMode === 'buttons');
+    this._togglePositionBtnEl.classList.toggle('selected', this._toggleMode === 'slider');
+    this._toggleButtonBtnEl.classList.toggle('selected', this._toggleMode === 'buttons');
 
     if (this._favoriteButtonEls) {
       this._favoriteButtonEls.forEach(({ value: favValue, el }) => {
@@ -1560,29 +1601,29 @@ class ChronoCover extends HTMLElement {
       }
 
       /* ---- Slider<->buttons mode-toggle icons ---- */
-      .icon-button-group {
+      .control-switch-buttons {
         position: relative;
         display: flex;
         flex-direction: row;
         align-items: center;
-        height: var(--icon-button-group-height, 48px);
-        margin-top: var(--controls-gap, 24px);
-        border-radius: var(--icon-button-group-border-radius, 9999px);
-        background-color: var(--icon-button-group-background, rgba(139, 145, 151, 0.1));
+        height: var(--control-switch-buttons-height, 48px);
+        margin-top: var(--control-switch-buttons-margin-top, 24px);
+        border-radius: var(--control-switch-buttons-border-radius, 9999px);
+        background-color: var(--control-switch-buttons-background, rgba(139, 145, 151, 0.1));
         box-sizing: border-box;
         width: 100%;
-        min-width: var(--icon-button-group-min-width, 54px);
-        max-width: var(--icon-button-group-max-width, 96px);
+        min-width: var(--control-switch-buttons-min-width, 54px);
+        max-width: var(--control-switch-buttons-max-width, 96px);
         padding: 0;
       }
-      .icon-toggle-button {
+      .control-switch-button {
         position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: var(--icon-toggle-button-size, 40px);
-        height: var(--icon-toggle-button-size, 40px);
-        margin: var(--icon-toggle-button-gap, 4px);
+        width: var(--control-switch-button-size, 40px);
+        height: var(--control-switch-button-size, 40px);
+        margin: var(--control-switch-button-gap, 4px);
         border: none;
         background: none;
         padding: 0;
@@ -1590,37 +1631,37 @@ class ChronoCover extends HTMLElement {
         color: var(--primary-text-color);
         -webkit-tap-highlight-color: transparent;
       }
-      .icon-toggle-button svg {
+      .control-switch-button svg {
         width: var(--button-icon-size, 24px);
         height: var(--button-icon-size, 24px);
         fill: currentColor;
         position: relative;
         z-index: 1;
       }
-      .icon-toggle-shade {
+      .control-switch-button-shade {
         opacity: 0;
         transition: opacity var(--transition-duration, 180ms) ease-in-out;
         background-color: var(--primary-text-color);
-        border-radius: var(--icon-toggle-border-radius, 9999px);
-        height: var(--icon-toggle-button-size, 40px);
-        width: var(--icon-toggle-button-size, 40px);
+        border-radius: var(--control-switch-button-border-radius, 9999px);
+        height: var(--control-switch-button-size, 40px);
+        width: var(--control-switch-button-size, 40px);
         position: absolute;
-        top: var(--icon-toggle-shade-expand, -10px);
-        left: var(--icon-toggle-shade-expand, -10px);
-        bottom: var(--icon-toggle-shade-expand, -10px);
-        right: var(--icon-toggle-shade-expand, -10px);
+        top: var(--control-switch-button-shade-expand, -10px);
+        left: var(--control-switch-button-shade-expand, -10px);
+        bottom: var(--control-switch-button-shade-expand, -10px);
+        right: var(--control-switch-button-shade-expand, -10px);
         margin: auto;
         box-sizing: border-box;
       }
-      .icon-toggle-button.selected {
+      .control-switch-button.selected {
         color: var(--primary-background-color);
       }
-      .icon-toggle-button.selected .icon-toggle-shade {
+      .control-switch-button.selected .control-switch-button-shade {
         opacity: 1;
       }
       @media (hover: hover) {
-        .icon-toggle-button:not(.selected):hover .icon-toggle-shade {
-          opacity: var(--icon-toggle-hover-opacity, 0.1);
+        .control-switch-button:not(.selected):hover .control-switch-button-shade {
+          opacity: var(--control-switch-button-hover-opacity, 0.1);
         }
       }
 
@@ -1633,8 +1674,9 @@ class ChronoCover extends HTMLElement {
         flex-wrap: wrap;
         width: 100%;
         max-width: var(--favorites-max-width, none);
-        gap: var(--favorite-button-gap, 16px);
-        margin-top: var(--favorites-gap, 16px);
+        row-gap: var(--favorites-row-gap, 16px);
+        column-gap: var(--favorites-column-gap, 16px);
+        margin-top: var(--favorites-margin-top, 16px);
         margin-bottom: var(--favorites-margin-bottom, 8px);
         user-select: none;
       }
