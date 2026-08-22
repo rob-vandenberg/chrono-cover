@@ -43,9 +43,15 @@
  */
 
 // --- Version ------------------------------------------------------------
-const CARD_VERSION = '1.3.39';
+const CARD_VERSION = '1.3.40';
 
 // --- Version History ----------------------------------------------------
+// v1.3.40: Internal-only rename, chrono-cover-specific (no chrono-slider-
+//           card equivalent exists - it's LitElement and never held these
+//           as persistent element references). JS variable
+//           _togglePositionBtnEl renamed to _toggleSliderBtnEl;
+//           _toggleButtonBtnEl renamed to _toggleButtonsBtnEl. Purely
+//           cosmetic, matches the v1.3.39 control-switch-* terminology.
 // v1.3.39: Further sync from chrono-slider-card - renames only, no
 //           behavior change. CSS variables: --controls-gap ->
 //           --control-switch-buttons-margin-top; --icon-toggle-button-size
@@ -1164,8 +1170,8 @@ class ChronoCover extends HTMLElement {
     this._openIconPathEl = root.querySelector('.open-icon-path');
     this._closeIconPathEl = root.querySelector('.close-icon-path');
     this._iconGroupEl = root.querySelector('.control-switch-buttons');
-    this._togglePositionBtnEl = root.querySelector('.control-switch-slider-mode');
-    this._toggleButtonBtnEl = root.querySelector('.control-switch-buttons-mode');
+    this._toggleSliderBtnEl = root.querySelector('.control-switch-slider-mode');
+    this._toggleButtonsBtnEl = root.querySelector('.control-switch-buttons-mode');
     this._favoritesEl = root.querySelector('.favorites');
 
     // Static, config-driven visibility - fixed for this instance's lifetime
@@ -1184,8 +1190,8 @@ class ChronoCover extends HTMLElement {
     this._openBtnEl.addEventListener('click', () => this._callDirectional('open'));
     this._stopBtnEl.addEventListener('click', () => this._stopCover());
     this._closeBtnEl.addEventListener('click', () => this._callDirectional('close'));
-    this._togglePositionBtnEl.addEventListener('click', () => this._setToggleMode('slider'));
-    this._toggleButtonBtnEl.addEventListener('click', () => this._setToggleMode('buttons'));
+    this._toggleSliderBtnEl.addEventListener('click', () => this._setToggleMode('slider'));
+    this._toggleButtonsBtnEl.addEventListener('click', () => this._setToggleMode('buttons'));
   }
 
   _buildFavoriteButtons() {
@@ -1346,8 +1352,8 @@ class ChronoCover extends HTMLElement {
 
     this._sliderEl.classList.toggle('active', this._toggleMode === 'slider');
     this._buttonGroupEl.classList.toggle('active', this._toggleMode === 'buttons');
-    this._togglePositionBtnEl.classList.toggle('selected', this._toggleMode === 'slider');
-    this._toggleButtonBtnEl.classList.toggle('selected', this._toggleMode === 'buttons');
+    this._toggleSliderBtnEl.classList.toggle('selected', this._toggleMode === 'slider');
+    this._toggleButtonsBtnEl.classList.toggle('selected', this._toggleMode === 'buttons');
 
     if (this._favoriteButtonEls) {
       this._favoriteButtonEls.forEach(({ value: favValue, el }) => {
